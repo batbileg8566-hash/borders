@@ -53,7 +53,7 @@ function RoutesLayer({ selectedBorder }: RoutesLayerProps) {
         <>
           <Polyline 
             positions={ubRoute}
-            pathOptions={{ color: '#2563eb', weight: 4, dashArray: '10, 15', opacity: 0.6, lineCap: 'round' }}
+            pathOptions={{ color: '#2563eb', weight: 4, opacity: 0.6, lineCap: 'round' }}
           />
           <Marker 
             position={ubRoute[Math.floor(ubRoute.length / 2)]} 
@@ -70,7 +70,7 @@ function RoutesLayer({ selectedBorder }: RoutesLayerProps) {
         <>
           <Polyline 
             positions={aimagRoute}
-            pathOptions={{ color: '#10b981', weight: 4, dashArray: '10, 15', opacity: 0.6, lineCap: 'round' }}
+            pathOptions={{ color: '#10b981', weight: 4, opacity: 0.6, lineCap: 'round' }}
           />
           <Marker 
             position={aimagRoute[Math.floor(aimagRoute.length / 2)]} 
