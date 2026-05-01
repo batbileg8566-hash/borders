@@ -8,84 +8,82 @@ import { PORT_GOODS, GOODS } from "./data";
 const UB_LAT = 47.9200;
 const UB_LNG = 106.9200;
 
-interface RouteLayerProps {
+interface RoutesLayerProps {
   selectedBorder: BorderCrossing | null;
-  distanceMode: 'ub' | 'aimag' | null;
 }
 
-function RouteLayer({ selectedBorder, distanceMode }: RouteLayerProps) {
-  const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+function RoutesLayer({ selectedBorder }: RoutesLayerProps) {
+  const [ubRoute, setUbRoute] = useState<[number, number][]>([]);
+  const [aimagRoute, setAimagRoute] = useState<[number, number][]>([]);
 
   useEffect(() => {
-    // Reset route when inputs change or are cleared
-    setRouteCoords([]);
+    setUbRoute([]);
+    setAimagRoute([]);
     
-    if (!selectedBorder || !distanceMode) {
-      return;
-    }
+    if (!selectedBorder) return;
 
-    let endLat = UB_LAT;
-    let endLng = UB_LNG;
-
-    if (distanceMode === 'aimag') {
-      if (selectedBorder.aimagLat && selectedBorder.aimagLng) {
-        endLat = selectedBorder.aimagLat;
-        endLng = selectedBorder.aimagLng;
-      } else {
-        console.warn(`No aimag coordinates for ${selectedBorder.name}`);
-        return;
-      }
-    }
-
-    const fetchRoute = async () => {
-      setIsLoading(true);
+    const fetchRoute = async (endLat: number, endLng: number, setter: React.Dispatch<React.SetStateAction<[number, number][]>>) => {
       try {
-        // OSRM expects: [longitude,latitude]
         const start = `${selectedBorder.lng},${selectedBorder.lat}`;
         const end = `${endLng},${endLat}`;
         const url = `https://router.project-osrm.org/route/v1/driving/${start};${end}?overview=full&geometries=geojson`;
         
-        console.log(`Fetching route for ${selectedBorder.name} (${distanceMode}):`, url);
-        
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
         const data = await response.json();
 
         if (data.code === 'Ok' && data.routes && data.routes[0]) {
-          // OSRM returns GeoJSON coordinates as [lng, lat]. 
-          // Leaflet Polyline expects [lat, lng].
           const flippedCoords = data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]);
-          console.log(`Route fetched successfully: ${flippedCoords.length} points`);
-          setRouteCoords(flippedCoords);
-        } else {
-          console.error("OSRM returned non-Ok code:", data.code);
+          setter(flippedCoords);
         }
       } catch (error) {
-        console.error("OSRM Routing API Error:", error);
-      } finally {
-        setIsLoading(false);
+        console.error("Routing Error:", error);
       }
     };
 
-    fetchRoute();
-  }, [selectedBorder, distanceMode]);
-
-  if (routeCoords.length === 0) return null;
+    fetchRoute(UB_LAT, UB_LNG, setUbRoute);
+    if (selectedBorder.aimagLat && selectedBorder.aimagLng) {
+      fetchRoute(selectedBorder.aimagLat, selectedBorder.aimagLng, setAimagRoute);
+    }
+  }, [selectedBorder]);
 
   return (
-    <Polyline 
-      positions={routeCoords}
-      pathOptions={{
-        color: distanceMode === 'ub' ? '#2563eb' : '#10b981',
-        weight: 4,
-        dashArray: '8, 12',
-        lineCap: 'round',
-        opacity: 0.9,
-        lineJoin: 'round'
-      }}
-    />
+    <>
+      {ubRoute.length > 0 && (
+        <>
+          <Polyline 
+            positions={ubRoute}
+            pathOptions={{ color: '#2563eb', weight: 4, dashArray: '10, 15', opacity: 0.6, lineCap: 'round' }}
+          />
+          <Marker 
+            position={ubRoute[Math.floor(ubRoute.length / 2)]} 
+            icon={L.divIcon({ 
+              className: 'route-dist-label', 
+              html: `<div style="background: #2563eb; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 900; white-space: nowrap; border: 2px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transform: rotate(-10deg);">УБ хүртэл: ${selectedBorder.ubDistance} КМ</div>`,
+              iconSize: [100, 24],
+              iconAnchor: [50, 12]
+            })} 
+          />
+        </>
+      )}
+      {aimagRoute.length > 0 && (
+        <>
+          <Polyline 
+            positions={aimagRoute}
+            pathOptions={{ color: '#10b981', weight: 4, dashArray: '10, 15', opacity: 0.6, lineCap: 'round' }}
+          />
+          <Marker 
+            position={aimagRoute[Math.floor(aimagRoute.length / 2)]} 
+            icon={L.divIcon({ 
+              className: 'route-dist-label', 
+              html: `<div style="background: #10b981; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 900; white-space: nowrap; border: 2px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transform: rotate(10deg);">Төв хүртэл: ${selectedBorder.aimagDistance} КМ</div>`,
+              iconSize: [100, 24],
+              iconAnchor: [50, 12]
+            })} 
+          />
+        </>
+      )}
+    </>
   );
 }
 
@@ -298,7 +296,7 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
           <ChangeView center={mongoliaCenter} zoom={5} />
         )}
 
-        <RouteLayer selectedBorder={selectedBorder} distanceMode={distanceMode as any} />
+        <RoutesLayer selectedBorder={selectedBorder} />
 
         {filteredBorders.map((border) => {
           const isSelected = selectedBorder?.id === border.id;

@@ -68,7 +68,7 @@ export function ChatPanel({ selectedBorder, onClose }: { selectedBorder: BorderC
         `;
       }
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
       const result = await model.generateContent(context);
       const response = await result.response;
       const responseText = response.text() || "Уучлаарай, хариулт авахад алдаа гарлаа.";
