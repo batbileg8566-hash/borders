@@ -33,6 +33,7 @@ export interface BorderCrossing {
   aimagDistance: number;
   aimagLat?: number;
   aimagLng?: number;
+  neighborPortName?: string;
   operationalStatus: OperationalStatus;
   trafficStatus: TrafficStatus;
   transportTypes: PortTransportType[];

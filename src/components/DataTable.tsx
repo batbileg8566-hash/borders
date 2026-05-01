@@ -144,7 +144,12 @@ export function DataTable({ borders, isOpen, onToggle }: DataTableProps) {
               {filteredAndSortedBorders.map(border => (
                 <tr key={border.id} className="hover:bg-blue-50/30 transition-colors group">
                   <td className="px-6 py-4">
-                    <span className="text-sm font-bold text-gray-900">{border.name}</span>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-900 leading-tight">{border.name}</span>
+                      {border.neighborPortName && (
+                        <span className="text-[10px] font-medium text-blue-500 opacity-70">↔ {border.neighborPortName}</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-xs font-semibold text-gray-500">{border.region}</td>
                   <td className="px-6 py-4">

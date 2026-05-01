@@ -227,7 +227,8 @@ const createCustomIcon = (
               font-family: 'Inter', sans-serif;
               letter-spacing: -0.01em;
             ">
-              ${border.name}
+              <div style="font-size: 11px; font-weight: 700; color: #1e293b; line-height: 1.1;">${border.name}</div>
+              ${border.neighborPortName ? `<div style="font-size: 8px; color: ${color}; font-weight: 600; margin-top: 1px; border-top: 1px solid #f1f5f9; padding-top: 1px;">↔ ${border.neighborPortName}</div>` : ''}
             </div>
         </div>
       </div>

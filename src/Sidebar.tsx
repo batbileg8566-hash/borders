@@ -291,6 +291,12 @@ export function Sidebar({
                   </div>
                 </div>
                 <h2 className="text-3xl font-black text-gray-900 tracking-tight leading-none">{selectedBorder.name}</h2>
+                {selectedBorder.neighborPortName && (
+                  <div className="mt-1 flex items-center gap-1.5 text-blue-600 font-bold">
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    <span className="text-sm tracking-tight">{selectedBorder.neighborPortName}</span>
+                  </div>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                    <div className="text-[10px] font-bold text-gray-500 border-l-2 border-blue-500 pl-2">
                       {selectedBorder.region} аймаг
@@ -486,7 +492,12 @@ export function Sidebar({
                         >
                           <div className="flex items-center gap-3">
                             <MapPin className="w-4 h-4 opacity-50" />
-                            <span className="text-sm font-bold">{port.name}</span>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold">{port.name}</span>
+                              {port.neighborPortName && (
+                                <span className="text-[10px] opacity-70 font-medium">↔ {port.neighborPortName}</span>
+                              )}
+                            </div>
                           </div>
                           <ArrowRight className="w-3.5 h-3.5 opacity-50" />
                         </button>
