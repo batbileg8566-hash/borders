@@ -1,4 +1,6 @@
-export type BorderStatus = "Хэвийн" | "Ачаалалтай" | "Квот тулсан";
+export type OperationalStatus = "Олон улсын" | "Хоёр талын" | "Түр ажиллагаатай";
+export type TrafficStatus = "Хэвийн" | "Ачаалалтай" | "Квот тулсан";
+export type PortTransportType = "Автозам" | "Төмөр зам" | "AGV" | "Агаар";
 export type GoodStatus = "ok" | "warn" | "crit";
 export type Direction = "import" | "export";
 
@@ -29,7 +31,11 @@ export interface BorderCrossing {
   lng: number;
   ubDistance: number;
   aimagDistance: number;
-  status: BorderStatus;
+  aimagLat?: number;
+  aimagLng?: number;
+  operationalStatus: OperationalStatus;
+  trafficStatus: TrafficStatus;
+  transportTypes: PortTransportType[];
   capacity: number;
   infrastructure?: Infrastructure;
 }
