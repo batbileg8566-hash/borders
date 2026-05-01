@@ -14,6 +14,7 @@ interface SidebarProps {
     direction: Direction;
   };
   onFilterChange: (filter: { goodId: string | null; direction: Direction }) => void;
+  onClose?: () => void;
 }
 
 const statusLabelMap: Record<GoodStatus, string> = {
@@ -58,7 +59,8 @@ export function Sidebar({
   onShowGoodDetail, 
   borders, 
   globalFilter, 
-  onFilterChange 
+  onFilterChange,
+  onClose
 }: SidebarProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -88,16 +90,36 @@ export function Sidebar({
 
   return (
     <motion.div 
-      animate={{ width: isCollapsed ? 80 : 350 }}
-      className="bg-white text-[#111827] h-full flex flex-col border-r border-[#e5e7eb] overflow-hidden shadow-sm relative group"
+      initial={false}
+      animate={{ 
+        width: typeof window !== 'undefined' && window.innerWidth < 768 ? '100vw' : (isCollapsed ? 80 : 350),
+        height: typeof window !== 'undefined' && window.innerWidth < 768 ? '70vh' : '100%',
+        position: typeof window !== 'undefined' && window.innerWidth < 768 ? 'fixed' : 'relative',
+        bottom: 0,
+        zIndex: 100
+      }}
+      className={`bg-white text-[#111827] flex flex-col border-r border-[#e5e7eb] overflow-hidden shadow-2xl md:shadow-sm relative group transition-all duration-300 ${
+        typeof window !== 'undefined' && window.innerWidth < 768 ? 'rounded-t-3xl border-t' : ''
+      }`}
     >
-      {/* Collapse Toggle */}
+      {/* Collapse Toggle - Desktop Only */}
       <button 
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3 top-24 z-50 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-lg hover:bg-blue-600 hover:text-white transition-all"
+        className="hidden md:flex absolute -right-3 top-24 z-50 w-6 h-6 bg-white border border-gray-200 rounded-full items-center justify-center shadow-lg hover:bg-blue-600 hover:text-white transition-all"
       >
         {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
       </button>
+
+      {/* Mobile Handle & Close */}
+      <div className="md:hidden flex items-center justify-between px-6 pt-4 shrink-0">
+        <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto" />
+        <button 
+          onClick={onClose}
+          className="p-1 rounded-full bg-gray-100 text-gray-500 absolute right-4 top-4"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
 
       {/* Global Filter Bar */}
       <AnimatePresence>

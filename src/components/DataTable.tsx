@@ -68,7 +68,7 @@ export function DataTable({ borders, isOpen, onToggle }: DataTableProps) {
   };
 
   return (
-    <div className={`absolute bottom-0 left-0 right-0 z-[1001] transition-all duration-500 ease-in-out ${isOpen ? 'h-[60%]' : 'h-12'}`}>
+    <div className={`fixed md:absolute bottom-0 left-0 right-0 z-[1001] transition-all duration-500 ease-in-out ${isOpen ? 'h-[80%] md:h-[60%]' : 'h-12'}`}>
       {/* Handle / Trigger */}
       <button 
         onClick={onToggle}
@@ -85,8 +85,8 @@ export function DataTable({ borders, isOpen, onToggle }: DataTableProps) {
       {/* Content */}
       <div className="h-[calc(100%-48px)] bg-white border-t border-gray-200 overflow-hidden flex flex-col shadow-inner">
         {/* Toolbar */}
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80 backdrop-blur-sm">
-          <div className="relative w-72">
+        <div className="p-3 md:p-4 border-b border-gray-100 flex flex-col md:flex-row gap-3 md:items-center justify-between bg-gray-50/80 backdrop-blur-sm">
+          <div className="relative w-full md:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
               type="text"
@@ -116,28 +116,28 @@ export function DataTable({ borders, isOpen, onToggle }: DataTableProps) {
             <thead className="sticky top-0 bg-gray-50 z-10 border-b border-gray-200">
               <tr>
                 {([
-                  { key: 'name', label: 'БООМТЫН НЭР' },
-                  { key: 'region', label: 'АЙМАГ' },
-                  { key: 'operationalStatus', label: 'ТҮВШИН' },
-                  { key: 'trafficStatus', label: 'АЧААЛАЛ' },
-                  { key: 'transportTypes', label: 'ТЭЭВРИЙН ТӨРӨЛ' },
-                  { key: 'ubDistance', label: 'УБ-ААС (КМ)' },
-                  { key: 'aimagDistance', label: 'ТӨВӨӨС (КМ)' }
-                ] as const).map(({ key, label }) => (
+                  { key: 'name', label: 'БООМТЫН НЭР', hiddenMobile: false },
+                  { key: 'region', label: 'АЙМАГ', hiddenMobile: false },
+                  { key: 'operationalStatus', label: 'ТҮВШИН', hiddenMobile: false },
+                  { key: 'trafficStatus', label: 'АЧААЛАЛ', hiddenMobile: false },
+                  { key: 'transportTypes', label: 'ТЭЭВРИЙН ТӨРӨЛ', hiddenMobile: false },
+                  { key: 'ubDistance', label: 'УБ-ААС (КМ)', hiddenMobile: true },
+                  { key: 'aimagDistance', label: 'ТӨВӨӨС (КМ)', hiddenMobile: true }
+                ] as { key: keyof BorderCrossing; label: string; hiddenMobile: boolean }[]).map((col) => (
                   <th 
-                    key={key}
-                    onClick={() => handleSort(key)}
-                    className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100 transition-colors group"
+                    key={col.key}
+                    onClick={() => handleSort(col.key)}
+                    className={`px-4 md:px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100 transition-colors group ${col.hiddenMobile ? 'hidden md:table-cell' : ''}`}
                   >
                     <div className="flex items-center gap-2">
-                      {label}
+                      {col.label}
                       <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        {sortConfig?.key === key && sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                        {sortConfig?.key === col.key && sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                       </span>
                     </div>
                   </th>
                 ))}
-                <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">БАРААНЫ ХҮРТЭЭМЖ</th>
+                <th className="hidden md:table-cell px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">БАРААНЫ ХҮРТЭЭМЖ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -174,9 +174,9 @@ export function DataTable({ borders, isOpen, onToggle }: DataTableProps) {
                        ))}
                     </div>
                   </td>
-                  <td className="px-6 py-4 font-mono text-xs font-bold text-blue-600">{border.ubDistance}</td>
-                  <td className="px-6 py-4 font-mono text-xs font-bold text-gray-600">{border.aimagDistance}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 font-mono text-xs font-bold text-blue-600 hidden md:table-cell">{border.ubDistance}</td>
+                  <td className="px-6 py-4 font-mono text-xs font-bold text-gray-600 hidden md:table-cell">{border.aimagDistance}</td>
+                  <td className="px-6 py-4 hidden md:table-cell">
                     <div className="flex gap-1">
                       {GOODS.slice(0, 5).map(g => {
                         const status = PORT_GOODS[border.id]?.[g.id]?.import;
