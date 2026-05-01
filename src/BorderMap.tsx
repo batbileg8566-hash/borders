@@ -283,6 +283,11 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
         center={mongoliaCenter}
         zoom={5}
         scrollWheelZoom={true}
+        style={{ height: "100%", width: "100%" }}
+        zoomControl={false}
+        dragging={true}
+        touchZoom={true}
+        tap={false}
         className="h-full w-full"
       >
         <TileLayer
@@ -321,7 +326,7 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
       </MapContainer>
 
       {/* Distance Mode Toggle Buttons */}
-      <div className="absolute top-20 md:top-6 left-2 md:left-6 z-[1000] flex flex-wrap gap-2 max-w-[200px] md:max-w-none">
+      <div className="absolute top-6 left-2 md:left-6 z-[1000] flex flex-col md:flex-row gap-2">
         {(['ub', 'aimag', null] as const).map(mode => (
           <button
             key={String(mode)}
@@ -338,7 +343,7 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
       </div>
 
       {/* Map Legend Overlay */}
-      <div className="absolute bottom-20 md:top-6 right-2 md:right-6 z-[1000] bg-white/90 backdrop-blur-md p-3 md:p-4 rounded-xl border border-gray-200 shadow-xl space-y-3 w-44 md:w-52 overflow-hidden max-h-[40vh] md:max-h-none overflow-y-auto">
+      <div className="absolute top-6 right-2 md:right-6 z-[1000] bg-white/90 backdrop-blur-md p-3 md:p-4 rounded-xl border border-gray-200 shadow-xl space-y-3 w-40 md:w-52 overflow-hidden max-h-[40vh] md:max-h-none overflow-y-auto">
         <div className="flex items-center justify-between">
           <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Тайлбар</h4>
           {(activeStatusFilter || activeTransportFilter) && (
