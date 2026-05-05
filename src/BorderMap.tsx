@@ -90,16 +90,19 @@ function RoutesLayer({ selectedBorder, distanceMode }: RoutesLayerProps) {
     <>
       <Polyline 
         positions={routeCoords}
-        pathOptions={{ color, weight: 4, opacity: 0.6, lineCap: 'round' }}
+        pathOptions={{ color, weight: 4, opacity: 0.8, lineCap: 'round' }}
+        interactive={false}
       />
       {markerPos && (
         <Marker 
           position={markerPos} 
+          zIndexOffset={2000}
+          interactive={false}
           icon={L.divIcon({ 
             className: 'route-dist-label', 
-            html: `<div style="background: ${color}; color: white; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 900; white-space: nowrap; border: 2px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transform: rotate(${distanceMode === 'ub' ? '-10deg' : '10deg'});">${label}</div>`,
-            iconSize: [100, 24],
-            iconAnchor: [50, 12]
+            html: `<div style="background: ${color}; color: white; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 900; white-space: nowrap; border: 2px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transform: rotate(${distanceMode === 'ub' ? '-5deg' : '5deg'}); position: relative; z-index: 2000;">${label}</div>`,
+            iconSize: [120, 30],
+            iconAnchor: [60, 15]
           })} 
         />
       )}
@@ -143,72 +146,48 @@ const createCustomIcon = (
 ) => {
   const color = getMarkerColor(border.id, border.operationalStatus, goodStatus);
 
-  if (distanceMode) {
+  // Only show distance pill for the SELECTED border when in distance mode
+  // This keeps the map cleaner by keeping other ports as pins
+  if (distanceMode && isSelected) {
     const dist = distanceMode === 'ub' ? border.ubDistance : border.aimagDistance;
     return L.divIcon({
       className: "distance-pill-icon",
       html: `
-        <div style="background: white; border: 2px solid ${color}; border-radius: 20px; padding: 2px 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15); white-space: nowrap; display: flex; align-items: center; gap: 4px; transform: ${isSelected ? 'scale(1.2)' : 'scale(1)'}; transition: all 0.2s ease;">
-          <span style="font-size: 11px; font-weight: 900; color: ${color}">${dist}</span>
-          <span style="font-size: 8px; font-weight: 700; color: #94a3b8">KM</span>
+        <div style="background: white; border: 2px solid ${color}; border-radius: 20px; padding: 4px 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); white-space: nowrap; display: flex; align-items: center; gap: 6px; transform: scale(1.2); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-bottom-right-radius: 4px; position: relative; z-index: 100;">
+          <span style="font-size: 13px; font-weight: 1000; color: ${color}">${dist}</span>
+          <span style="font-size: 9px; font-weight: 800; color: #94a3b8; letter-spacing: 0.05em;">KM</span>
         </div>
       `,
-      iconSize: [64, 28],
-      iconAnchor: [32, 14],
+      iconSize: [80, 40],
+      iconAnchor: [40, 20],
     });
   }
 
   const pinSize = isSelected ? 42 : 32;
-  const labelWidth = 140;
-  const containerWidth = labelWidth;
-  const containerHeight = pinSize + 40; // Pin + Gap + Label
   
   return L.divIcon({
     className: "custom-port-icon",
     html: `
-      <div style="width: ${containerWidth}px; height: ${containerHeight}px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; pointer-events: none;">
-        
-        <!-- PIN at the TOP center of this container -->
-        <div style="
-          width: ${pinSize}px;
-          height: ${pinSize}px;
-          transform: ${isSelected ? 'scale(1.1)' : 'scale(1)'};
-          transition: transform 0.3s ease;
-          cursor: pointer;
-          pointer-events: auto;
-          position: relative;
-          z-index: 20;
-        ">
-          <svg viewBox="0 0 24 24" style="width: 100%; height: 100%; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));" fill="${color}" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-            <circle cx="12" cy="9" r="7" fill="white" />
-          </svg>
-          <div style="position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); font-size: ${pinSize * 0.4}px;">
-            ${goodIcon || '📍'}
-          </div>
-        </div>
-
-        <!-- Name Label BELOW the pin -->
-        <div style="
-          background: white;
-          padding: 2px 8px;
-          border-radius: 6px;
-          font-size: 10px;
-          font-weight: 800;
-          color: #1e293b;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          border: 1.5px solid ${color};
-          margin-top: 2px;
-          pointer-events: auto;
-          white-space: nowrap;
-          z-index: 10;
-        ">
-          ${border.name}
+      <div style="
+        width: ${pinSize}px;
+        height: ${pinSize}px;
+        transform: ${isSelected ? 'scale(1.1)' : 'scale(1)'};
+        transition: transform 0.2s ease;
+        position: relative;
+        z-index: ${isSelected ? 1000 : 20};
+        cursor: pointer;
+      ">
+        <svg viewBox="0 0 24 24" style="width: 100%; height: 100%; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));" fill="${color}" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+          <circle cx="12" cy="9" r="7" fill="white" />
+        </svg>
+        <div style="position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); font-size: ${pinSize * 0.4}px;">
+          ${goodIcon || '📍'}
         </div>
       </div>
     `,
-    iconSize: [containerWidth, containerHeight],
-    iconAnchor: [containerWidth / 2, pinSize * 0.9], // Anchor at where the pin tip is (approx 90% of pin height)
+    iconSize: [pinSize, pinSize],
+    iconAnchor: [pinSize / 2, pinSize], // Anchor at the tip of the pin
   });
 };
 
@@ -220,6 +199,124 @@ function ChangeView({ lat, lng, zoom = 7 }: { lat: number, lng: number, zoom?: n
     }
   }, [lat, lng, map, zoom]);
   return null;
+}
+
+interface BorderMarkerProps {
+  border: BorderCrossing;
+  isSelected: boolean;
+  selectedGood?: Good;
+  goodStatus?: GoodStatus;
+  distanceMode: 'ub' | 'aimag' | null;
+  onSelect: (border: BorderCrossing) => void;
+}
+
+function BorderMarker({ border, isSelected, selectedGood, goodStatus, distanceMode, onSelect }: BorderMarkerProps) {
+  const markerRef = React.useRef<L.Marker>(null);
+  const pinSize = isSelected ? 42 : 32;
+
+  useEffect(() => {
+    if (isSelected && markerRef.current) {
+      markerRef.current.openPopup();
+    }
+  }, [isSelected]);
+
+  return (
+    <Marker
+      ref={markerRef}
+      position={[border.lat, border.lng]}
+      icon={createCustomIcon(border, isSelected, selectedGood?.icon, goodStatus, distanceMode)}
+      eventHandlers={{
+        click: () => onSelect(border),
+      }}
+    >
+      <Tooltip 
+        direction="top" 
+        offset={[0, -pinSize]} 
+        className="font-bold text-[10px] uppercase tracking-wider border-0 shadow-md rounded-lg pointer-events-none" 
+        permanent={isSelected}
+        interactive={false}
+      >
+        {border.name}
+      </Tooltip>
+
+      <Popup minWidth={240} className="custom-info-popup">
+        <div className="w-[240px] flex flex-col gap-3 font-sans">
+          {/* HEADER */}
+          <div className="text-center border-b border-gray-100 pb-2">
+            <h3 className="text-lg font-black text-slate-800 leading-tight">{border.name}</h3>
+          </div>
+
+          {/* IMPORT SECTION */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[9px] font-black uppercase tracking-wider">
+                <span className="text-xs">↓</span> ИМПОРТ
+              </div>
+              <span className="text-[10px] font-bold text-slate-400">{border.legalImports.length} төрөл</span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {border.legalImports.slice(0, 8).map((imp, idx) => {
+                const good = GOODS.find(g => g.id === imp.goodId);
+                const resMatch = imp.resolutions[0]?.match(/\d+/);
+                const resLabel = resMatch ? `#${resMatch[0]}` : (imp.resolutions[0] || '...');
+                return (
+                  <div key={idx} className="flex flex-col items-center p-1 bg-emerald-50/50 border border-emerald-100 rounded-lg group transition-all hover:border-emerald-300">
+                    <span className="text-lg mb-0.5">{good?.icon || '📦'}</span>
+                    <span className="text-[8px] font-black text-emerald-700 truncate w-full text-center">{resLabel}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* EXPORT SECTION */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[9px] font-black uppercase tracking-wider">
+                <span className="text-xs">↑</span> ЭКСПОРТ
+              </div>
+              <span className="text-[10px] font-bold text-slate-400">{border.legalExports.length} төрөл</span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {border.legalExports.slice(0, 8).map((exp, idx) => {
+                const good = GOODS.find(g => g.id === exp.goodId);
+                const resMatch = exp.resolutions[0]?.match(/\d+/);
+                const resLabel = resMatch ? `#${resMatch[0]}` : (exp.resolutions[0] || '...');
+                return (
+                  <div key={idx} className="flex flex-col items-center p-1 bg-indigo-50/50 border border-indigo-100 rounded-lg group transition-all hover:border-indigo-300">
+                    <span className="text-lg mb-0.5">{good?.icon || '📦'}</span>
+                    <span className="text-[8px] font-black text-indigo-700 truncate w-full text-center">{resLabel}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* LABORATORY SECTION */}
+          {border.hasLaboratory && (
+            <div className="mt-1 p-2 bg-teal-50/50 border border-teal-100 rounded-xl">
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-xs">🔬</span>
+                <span className="text-[9px] font-black text-teal-700 uppercase tracking-widest">Гаалийн лаборатори</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {border.labCapabilities?.slice(0, 2).map((cap, idx) => (
+                  <div key={idx} className="bg-white border border-teal-200 px-1.5 py-0.5 rounded text-[8px] font-bold text-teal-800">
+                    {cap}
+                  </div>
+                ))}
+                {(border.labCapabilities?.length || 0) > 2 && (
+                  <span className="text-[9px] font-bold text-teal-400 self-center pl-1">
+                    +{(border.labCapabilities?.length || 0) - 2}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </Popup>
+    </Marker>
+  );
 }
 
 export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, distanceMode, onDistanceModeChange }: BorderMapProps) {
@@ -256,70 +353,33 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
 
         <RoutesLayer selectedBorder={selectedBorder} distanceMode={distanceMode} />
 
-        {filteredBorders.map((border) => {
-          const isSelected = selectedBorder?.id === border.id;
-          const pinSize = isSelected ? 42 : 32;
-          
-          let goodStatus: GoodStatus | undefined = undefined;
-          if (globalFilter.goodId) {
-            goodStatus = 'ok';
-          }
-
-          return (
-            <Marker
-              key={border.id}
-              position={[border.lat, border.lng]}
-              icon={createCustomIcon(border, isSelected, selectedGood?.icon, goodStatus, distanceMode)}
-              eventHandlers={{
-                click: () => onSelect(border),
-              }}
-            >
-              {isSelected && (
-                <Popup closeButton={false} className="custom-popup" offset={[0, -pinSize * 0.5]}>
-                  <div className="p-1 min-w-[200px]">
-                    <div className="flex items-center justify-between mb-2">
-                       <span className={`px-2 py-0.5 text-white text-[9px] font-black uppercase rounded ${portStatusColorMap[border.operationalStatus]}`}>
-                        {border.operationalStatus}
-                       </span>
-                       <span className="text-[10px] text-gray-400 font-black font-mono">#{border.id.toUpperCase()}</span>
-                    </div>
-                    <h3 className="text-sm font-black text-gray-900 border-b border-gray-100 pb-1 mb-2">{border.name}</h3>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-gray-400 font-bold uppercase">Төвөөс:</span>
-                        <span className="text-emerald-600 font-black">{border.aimagDistance} КМ</span>
-                      </div>
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-gray-400 font-bold uppercase">УБ-аас:</span>
-                        <span className="text-blue-600 font-black">{border.ubDistance} КМ</span>
-                      </div>
-                      {border.hasLaboratory && (
-                        <div className="mt-2 flex items-center gap-1.5 bg-teal-50 px-2 py-1 rounded text-teal-700 text-[9px] font-black uppercase">
-                          <span>🔬</span> Лабораторитой
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Popup>
-              )}
-            </Marker>
-          );
-        })}
+        {filteredBorders.map((border) => (
+          <BorderMarker
+            key={border.id}
+            border={border}
+            isSelected={selectedBorder?.id === border.id}
+            selectedGood={selectedGood}
+            goodStatus={globalFilter.goodId ? 'ok' : undefined}
+            distanceMode={distanceMode}
+            onSelect={onSelect}
+          />
+        ))}
       </MapContainer>
 
-      {/* Basic Filters */}
-      <div className="absolute top-6 left-6 z-[1000] flex gap-2">
-        {(['ub', 'aimag', null] as const).map(mode => (
+      {/* Distance Mode Buttons - Moved to Bottom Right */}
+      <div className="absolute bottom-6 right-6 z-[1000] flex flex-col gap-2">
+        {(['ub', 'aimag'] as const).map(mode => (
           <button
             key={String(mode)}
-            onClick={() => onDistanceModeChange(mode)}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border shadow-xl ${
+            onClick={() => onDistanceModeChange(distanceMode === mode ? null : mode)}
+            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border shadow-2xl flex items-center gap-2 ${
               distanceMode === mode 
-                ? "bg-blue-600 text-white border-blue-700" 
-                : "bg-white text-gray-600 border-gray-200"
+                ? "bg-blue-600 text-white border-blue-700 scale-105" 
+                : "bg-white text-gray-600 border-gray-100 hover:bg-gray-50"
             }`}
           >
-            {mode === 'ub' ? 'УБ-аас' : mode === 'aimag' ? 'Аймгийн төвөөс' : 'Хаах'}
+            <span className="text-sm">{mode === 'ub' ? '🏢' : '🏘️'}</span>
+            {mode === 'ub' ? 'УБ хүртэл' : 'Төв хүртэл'}
           </button>
         ))}
       </div>

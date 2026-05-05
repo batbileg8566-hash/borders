@@ -8,9 +8,10 @@ interface DataTableProps {
   borders: BorderCrossing[];
   isOpen: boolean;
   onToggle: () => void;
+  onSelect: (border: BorderCrossing) => void;
 }
 
-export function DataTable({ borders, isOpen, onToggle }: DataTableProps) {
+export function DataTable({ borders, isOpen, onToggle, onSelect }: DataTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: keyof BorderCrossing; direction: 'asc' | 'desc' } | null>(null);
 
@@ -142,7 +143,11 @@ export function DataTable({ borders, isOpen, onToggle }: DataTableProps) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredAndSortedBorders.map(border => (
-                <tr key={border.id} className="hover:bg-blue-50/30 transition-colors group">
+                <tr 
+                  key={border.id} 
+                  onClick={() => { onSelect(border); onToggle(); }}
+                  className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
+                >
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-gray-900 leading-tight">{border.name}</span>

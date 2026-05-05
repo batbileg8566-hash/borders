@@ -58,3 +58,25 @@ html, body, #root {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
+/* CUSTOM POPUP STYLES */
+.custom-info-popup .leaflet-popup-content-wrapper {
+  border-radius: 20px !important;
+  padding: 0 !important;
+  border: 2px solid #2563eb !important;
+  box-shadow: 0 15px 35px -10px rgba(37, 99, 235, 0.25) !important;
+  overflow: hidden;
+}
+
+.custom-info-popup .leaflet-popup-content {
+  margin: 16px !important;
+  width: auto !important;
+}
+
+.custom-info-popup .leaflet-popup-tip-container {
+  display: none !important;
+}
+
+.custom-info-popup {
+  margin-bottom: 25px; /* Pull it up from the pin */
+}

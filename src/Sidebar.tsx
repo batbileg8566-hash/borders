@@ -16,6 +16,8 @@ interface SidebarProps {
   };
   onFilterChange: (filter: { goodId: string | null; direction: Direction }) => void;
   onClose?: () => void;
+  distanceMode: 'ub' | 'aimag' | null;
+  onDistanceModeChange: (mode: 'ub' | 'aimag' | null) => void;
 }
 
 const statusLabelMap: Record<GoodStatus, string> = {
@@ -61,10 +63,18 @@ export function Sidebar({
   borders, 
   globalFilter, 
   onFilterChange,
-  onClose
+  onClose,
+  distanceMode,
+  onDistanceModeChange
 }: SidebarProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<'info' | 'goods' | 'dev'>('info');
+
+  // Reset tab to 'info' when a new border is selected
+  React.useEffect(() => {
+    setActiveTab('info');
+  }, [selectedBorder?.id]);
   
   const selectedGood = useMemo(() => GOODS.find(g => g.id === globalFilter.goodId), [globalFilter.goodId]);
 
@@ -296,489 +306,355 @@ export function Sidebar({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 flex flex-col overflow-hidden relative">
         <AnimatePresence mode="wait">
           {isCollapsed ? (
             <motion.div 
               key="collapsed"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center py-4 gap-4"
+              className="flex-1 overflow-y-auto flex flex-col items-center py-4 gap-4 custom-scrollbar"
             >
               {borders.map(b => (
                 <button 
                   key={b.id} 
                   onClick={() => onSelect(b)}
-                  className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all relative ${
-                    selectedBorder?.id === b.id ? 'bg-blue-600 border-blue-700 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-400'
+                  className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${
+                    selectedBorder?.id === b.id 
+                      ? 'bg-blue-600 border-blue-700 text-white shadow-lg shadow-blue-200' 
+                      : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
                   }`}
                 >
-                  <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${
-                    b.operationalStatus === 'Олон улсын' ? 'bg-blue-600' : b.operationalStatus === 'Хоёр талын' ? 'bg-amber-500' : 'bg-slate-500'
-                  }`} />
-                  <span className="text-[10px] font-black font-mono">{b.id.slice(0, 2).toUpperCase()}</span>
+                  <MapPin className="w-5 h-5" />
                 </button>
               ))}
             </motion.div>
           ) : selectedBorder ? (
-            /* PORT DETAIL MODE */
+            /* PORT DETAIL MODE - FIXED COHESIVE LAYOUT */
             <motion.div
               key={selectedBorder.id}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
-              className="p-5 space-y-8"
+              className="flex flex-col h-full bg-white overflow-hidden"
             >
-              {/* Filter Context Back Button */}
-              {globalFilter.goodId && (
-                <button 
-                  onClick={() => onSelect(null)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-blue-100 transition-colors w-full mb-4 border border-blue-100"
-                >
-                  <ArrowRight className="w-3.5 h-3.5 rotate-180" />
-                  Шүүлтүүрийн үр дүн рүү буцах ({selectedGood?.name})
-                </button>
-              )}
-
-              {/* Port Header */}
-              <section className="relative">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`px-2 py-0.5 text-white text-[9px] font-black uppercase rounded shadow-sm ${portStatusColorMap[selectedBorder.operationalStatus]}`}>{selectedBorder.operationalStatus}</span>
-                  <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shadow-sm ${trafficColorMap[selectedBorder.trafficStatus]}`}>
-                    {selectedBorder.trafficStatus}
-                  </div>
-                  <div className="ml-auto">
-                    <span className="text-[10px] text-gray-400 font-black font-mono">#{selectedBorder.id.toUpperCase()}</span>
-                  </div>
-                </div>
-                <h2 className="text-3xl font-black text-gray-900 tracking-tight leading-none">{selectedBorder.name}</h2>
-                {selectedBorder.neighborPortName && (
-                  <div className="mt-1 flex items-center gap-1.5 text-blue-600 font-bold">
-                    <ArrowRight className="w-3.5 h-3.5" />
-                    <span className="text-sm tracking-tight">{selectedBorder.neighborPortName}</span>
-                  </div>
-                )}
-                
-                {selectedBorder.imageUrl && (
-                  <div className="mt-4 rounded-2xl overflow-hidden border border-gray-100 shadow-sm aspect-video bg-gray-50 flex items-center justify-center relative group">
-                    <img 
-                      src={selectedBorder.imageUrl} 
-                      alt={selectedBorder.name} 
-                      className="w-full h-full object-cover transition-opacity duration-300"
-                      referrerPolicy="no-referrer"
-                      onLoad={(e) => {
-                        e.currentTarget.style.opacity = '1';
-                      }}
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        const errorPlaceholder = e.currentTarget.nextElementSibling as HTMLElement;
-                        if (errorPlaceholder) {
-                          errorPlaceholder.style.display = 'flex';
-                        }
-                      }}
-                      style={{ opacity: 0 }}
-                    />
-                    {/* Custom Error Placeholder */}
-                    <div 
-                      className="hidden absolute inset-0 flex-col items-center justify-center text-gray-300 p-8"
-                      style={{ display: 'none' }}
+              {/* FIXED HEADER */}
+              <div className="shrink-0 bg-white z-20 shadow-sm relative">
+                {/* Internal Padding for Header Info */}
+                <div className="p-5 pb-3">
+                  {globalFilter.goodId && (
+                    <button 
+                      onClick={() => onSelect(null)}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-blue-100 transition-colors w-full mb-4 border border-blue-100"
                     >
-                      <svg className="w-12 h-12 mb-2 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
+                      <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+                      Шүүлтүүрийн үр дүн рүү буцах ({selectedGood?.name})
+                    </button>
+                  )}
+                  
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`px-2 py-0.5 text-white text-[9px] font-black uppercase rounded shadow-sm ${portStatusColorMap[selectedBorder.operationalStatus]}`}>{selectedBorder.operationalStatus}</span>
+                    <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shadow-sm ${trafficColorMap[selectedBorder.trafficStatus]}`}>
+                      {selectedBorder.trafficStatus}
                     </div>
-                  </div>
-                )}
-
-                {selectedBorder.description && (
-                  <p className="mt-4 text-xs text-gray-500 leading-relaxed italic">
-                    {selectedBorder.description}
-                  </p>
-                )}
-
-                <div className="mt-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 grid grid-cols-2 gap-y-4 gap-x-2">
-                  <div className="space-y-0.5">
-                    <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Зам талбай</div>
-                    <div className="text-sm font-black text-gray-800">{selectedBorder.areaSize?.toLocaleString() || "—"} м²</div>
-                  </div>
-                  <div className="space-y-0.5">
-                    <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Ажиллах хүч</div>
-                    <div className="text-sm font-black text-gray-800">
-                      {(selectedBorder.staffGUAB || 0) + (selectedBorder.staffGUB || 0)} <span className="text-[10px] font-bold text-gray-400">(ГУАБ: {selectedBorder.staffGUAB || 0})</span>
+                    <div className="ml-auto">
+                      <span className="text-[10px] text-gray-400 font-black font-mono">#{selectedBorder.id.toUpperCase()}</span>
                     </div>
-                  </div>
-                  <div className="space-y-0.5">
-                    <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Агуулах / Хяналт</div>
-                    <div className="text-sm font-black text-gray-800">
-                      {selectedBorder.warehousesCount || "—"} агуулах / {selectedBorder.controlZonesCount || "—"} бүс
-                    </div>
-                  </div>
-                  <div className="space-y-0.5">
-                    <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Лаборатори</div>
-                    <div className="text-sm font-black text-blue-600">{selectedBorder.labCapacity || "—"} (хүчин)</div>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                   <div className="text-[10px] font-bold text-gray-500 border-l-2 border-blue-500 pl-2">
-                      {selectedBorder.region} аймаг
-                   </div>
-                   {selectedBorder.transportTypes.map(t => (
-                     <div key={t} className="text-[10px] font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
-                        {transportIconMap[t]}
-                     </div>
-                   ))}
-                </div>
-              </section>
-
-              {/* Distances */}
-              <section className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                   <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">УБ хотоос</div>
-                   <div className="text-lg font-black text-blue-600">{selectedBorder.ubDistance} <span className="text-[10px] font-bold text-gray-400 uppercase">км</span></div>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                   <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Төвөөс</div>
-                   <div className="text-lg font-black text-emerald-600">{selectedBorder.aimagDistance} <span className="text-[10px] font-bold text-gray-400 uppercase">км</span></div>
-                </div>
-              </section>
-
-              {/* Verbatim Goods Section - Direct from Government Resolutions */}
-              <section className="space-y-6">
-                <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                  <Package className="w-4 h-4 text-blue-600" />
-                  <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400">
-                    Тогтоолын дагуу нэвтрүүлэх бараа
-                  </h3>
-                </div>
-
-                {/* IMPORT */}
-                {selectedBorder.legalImports && selectedBorder.legalImports.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 px-1">
-                      <span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest bg-emerald-50 px-2 py-1 rounded">
-                        ↓ Импорт
-                      </span>
-                      <span className="text-[10px] text-gray-400 font-mono font-bold">
-                        {selectedBorder.legalImports.length} төрөл
-                      </span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {selectedBorder.legalImports.map((entry, i) => {
-                        const good = GOODS.find(g => g.id === entry.goodId);
-                        return (
-                          <div 
-                            key={`imp-${i}`}
-                            onClick={() => good && onShowGoodDetail(good, { import: 'ok' })}
-                            className="group flex items-start gap-3 p-3 bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-100 hover:border-emerald-200 rounded-xl cursor-pointer transition-all"
-                          >
-                            <span className="text-xl flex-shrink-0">{good?.icon || '•'}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[12px] font-bold text-gray-800 leading-snug">
-                                {entry.text}
-                              </div>
-                              {entry.conditions && (
-                                <div className="text-[10px] text-orange-600 italic mt-0.5 font-semibold">
-                                  ({entry.conditions})
-                                </div>
-                              )}
-                              <div className="flex flex-wrap gap-1 mt-1.5">
-                                {entry.resolutions.map((res, j) => (
-                                  <span 
-                                    key={j} 
-                                    className="text-[9px] font-mono font-black text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-200"
-                                  >
-                                    {res}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* EXPORT */}
-                {selectedBorder.legalExports && selectedBorder.legalExports.length > 0 && (
-                  <div className="space-y-2 pt-2">
-                    <div className="flex items-center gap-2 px-1">
-                      <span className="text-[9px] font-black text-purple-700 uppercase tracking-widest bg-purple-50 px-2 py-1 rounded">
-                        ↑ Экспорт
-                      </span>
-                      <span className="text-[10px] text-gray-400 font-mono font-bold">
-                        {selectedBorder.legalExports.length} төрөл
-                      </span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {selectedBorder.legalExports.map((entry, i) => {
-                        const good = GOODS.find(g => g.id === entry.goodId);
-                        return (
-                          <div 
-                            key={`exp-${i}`}
-                            onClick={() => good && onShowGoodDetail(good, { export: 'ok' })}
-                            className="group flex items-start gap-3 p-3 bg-purple-50/50 hover:bg-purple-50 border border-purple-100 hover:border-purple-200 rounded-xl cursor-pointer transition-all"
-                          >
-                            <span className="text-xl flex-shrink-0">{good?.icon || '•'}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[12px] font-bold text-gray-800 leading-snug">
-                                {entry.text}
-                              </div>
-                              {entry.conditions && (
-                                <div className="text-[10px] text-orange-600 italic mt-0.5 font-semibold">
-                                  ({entry.conditions})
-                                </div>
-                              )}
-                              <div className="flex flex-wrap gap-1 mt-1.5">
-                                {entry.resolutions.map((res, j) => (
-                                  <span 
-                                    key={j} 
-                                    className="text-[9px] font-mono font-black text-purple-700 bg-white px-1.5 py-0.5 rounded border border-purple-200"
-                                  >
-                                    {res}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Empty state */}
-                {(!selectedBorder.legalImports || selectedBorder.legalImports.length === 0) && 
-                 (!selectedBorder.legalExports || selectedBorder.legalExports.length === 0) && (
-                  <div className="p-6 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                    <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">
-                      Тогтоолд тусгагдсан бараа байхгүй
-                    </p>
-                  </div>
-                )}
-
-                {/* PROPOSED ADDITIONS */}
-                {selectedBorder.proposedAdditions && selectedBorder.proposedAdditions.length > 0 && (
-                  <div className="space-y-2 pt-4 mt-4 border-t border-rose-100">
-                    <div className="flex items-center gap-2 px-1">
-                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                      <span className="text-[9px] font-black text-rose-700 uppercase tracking-widest bg-rose-50 px-2 py-1 rounded">
-                        + Нэмэх саналтай
-                      </span>
-                      <span className="text-[10px] text-rose-400 font-mono font-bold ml-auto">
-                        {selectedBorder.proposedAdditions.length} санал
-                      </span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {selectedBorder.proposedAdditions.map((entry, i) => {
-                        const good = GOODS.find(g => g.id === entry.goodId);
-                        return (
-                          <div 
-                            key={`prop-${i}`}
-                            onClick={() => good && onShowGoodDetail(good, { import: 'warn' })}
-                            className="group flex items-start gap-3 p-3 bg-rose-50/40 hover:bg-rose-50 border border-rose-100 hover:border-rose-200 rounded-xl cursor-pointer transition-all"
-                          >
-                            <span className="text-xl flex-shrink-0 opacity-70">{good?.icon || '•'}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[12px] font-bold text-gray-700 leading-snug">
-                                {entry.text}
-                              </div>
-                              <div className="flex flex-wrap gap-1 mt-1.5">
-                                <span className="text-[9px] font-mono font-black text-rose-700 bg-white px-1.5 py-0.5 rounded border border-rose-200">
-                                  {entry.targetResolution}
-                                </span>
-                              </div>
-                              {entry.proposalNote && (
-                                <div className="mt-2 text-[10px] text-gray-600 leading-relaxed italic border-l-2 border-rose-200 pl-2">
-                                  {entry.proposalNote}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              {/* Infrastructure Section */}
-              <section className="pt-4 space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-gray-100 text-blue-600">
-                  <Building2 className="w-4 h-4" />
-                  <h3 className="text-[11px] font-black uppercase tracking-[0.2em]">Дэд бүтэц</h3>
-                </div>
-                
-                {selectedBorder.infrastructure ? (
-                  <div className="space-y-4 bg-blue-50/20 p-4 rounded-2xl border border-blue-50">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest font-mono">Талбай</div>
-                        <div className="text-sm font-black text-gray-800">{selectedBorder.infrastructure.totalArea}</div>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest font-mono">Төрөл</div>
-                        <div className="text-sm font-black text-gray-800">{selectedBorder.operationalStatus}</div>
-                      </div>
-                    </div>
-                    
-                    <div className="max-h-48 overflow-y-auto custom-scrollbar pr-2 space-y-3 pt-2 border-t border-blue-100/50">
-                      {selectedBorder.infrastructure.details.map((detail, i) => (
-                        <div key={i} className="flex gap-2.5">
-                          <CornerDownRight className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
-                          <span className="text-xs text-gray-600 leading-snug font-medium italic">{detail}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-8 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-center">
-                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Мэдээлэл байхгүй</p>
-                  </div>
-                )}
-              </section>
-
-              {/* Development Project Section */}
-              {selectedBorder.development && (
-                <section className="pt-4 space-y-4 border-t border-gray-100">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100 text-indigo-600">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em]">Бүтээн байгуулалт, Шинэчлэл</h3>
                   </div>
                   
-                  <div className="bg-white rounded-2xl border border-indigo-100 overflow-hidden shadow-sm">
-                    {selectedBorder.development.imageUrl && (
-                      <div className="w-full h-40 bg-gray-100 relative overflow-hidden flex items-center justify-center">
+                  <h2 className="text-2xl font-black text-gray-900 tracking-tight leading-none">{selectedBorder.name}</h2>
+                  
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="text-[10px] font-bold text-gray-500 border-l-2 border-blue-500 pl-2">
+                      {selectedBorder.region} аймаг
+                    </div>
+                    {selectedBorder.transportTypes.map(t => (
+                      <div key={t} className="text-[10px] font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
+                        {transportIconMap[t]}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* STICKY TAB SWITCHER - Edge to Edge in Sidebar */}
+                <div className="flex px-5 pb-2 bg-white border-b border-gray-100">
+                  <div className="flex gap-1 bg-gray-100/70 p-1 rounded-xl border border-gray-100 w-full">
+                    <button 
+                      onClick={() => setActiveTab('info')} 
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                        activeTab === 'info' ? 'bg-white text-blue-600 shadow-sm border border-gray-200/50' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Ерөнхий
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('goods')} 
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                        activeTab === 'goods' ? 'bg-white text-blue-600 shadow-sm border border-gray-200/50' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Бараа
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('dev')} 
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                        activeTab === 'dev' ? 'bg-white text-blue-600 shadow-sm border border-gray-200/50' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Төсөл
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Content Area */}
+              <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-gray-50/30">
+                {activeTab === 'info' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                  >
+                    {/* Header Image inside Info Tab if exists */}
+                    {selectedBorder.imageUrl && (
+                      <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm aspect-video bg-gray-50 flex items-center justify-center relative mb-6">
                         <img 
-                          src={selectedBorder.development.imageUrl} 
-                          alt={selectedBorder.development.projectName} 
-                          className="w-full h-full object-cover transition-opacity duration-300"
+                          src={selectedBorder.imageUrl} 
+                          alt={selectedBorder.name} 
+                          className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
-                          onLoad={(e) => {
-                            e.currentTarget.style.opacity = '1';
-                          }}
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            const errorPlaceholder = e.currentTarget.nextElementSibling as HTMLElement;
-                            if (errorPlaceholder) {
-                              errorPlaceholder.style.display = 'flex';
-                            }
-                          }}
-                          style={{ opacity: 0 }}
                         />
-                        {/* Custom Error Placeholder */}
-                        <div 
-                          className="hidden absolute inset-0 flex-col items-center justify-center text-gray-300 p-4"
-                          style={{ display: 'none' }}
-                        >
-                          <svg className="w-8 h-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">Зураг ачаалахад алдаа гарлаа</span>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                      </div>
+                    )}
+
+                    {selectedBorder.description && (
+                      <p className="text-xs text-gray-500 leading-relaxed italic border-l-2 border-gray-200 pl-3 mb-6">
+                        {selectedBorder.description}
+                      </p>
+                    )}
+
+                    {/* Distances */}
+                    <section className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => onDistanceModeChange(distanceMode === 'ub' ? null : 'ub')}
+                        className={`p-3 rounded-xl border transition-all text-left group ${
+                          distanceMode === 'ub' 
+                            ? 'bg-blue-600 border-blue-700 shadow-lg shadow-blue-200' 
+                            : 'bg-white border-gray-100 hover:bg-blue-50 hover:border-blue-200'
+                        }`}
+                      >
+                        <div className={`text-[9px] font-black uppercase tracking-widest mb-1 ${distanceMode === 'ub' ? 'text-blue-100' : 'text-gray-400 group-hover:text-blue-400'}`}>УБ хотоос</div>
+                        <div className={`text-lg font-black ${distanceMode === 'ub' ? 'text-white' : 'text-blue-600'}`}>
+                          {selectedBorder.ubDistance} <span className={`text-[10px] font-bold uppercase ${distanceMode === 'ub' ? 'text-blue-200' : 'text-gray-400'}`}>км</span>
                         </div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
-                        <div className="absolute bottom-2 left-3 right-3">
-                          <span className="text-white text-[9px] font-black uppercase tracking-widest leading-tight block drop-shadow-sm">
-                            {selectedBorder.development.projectName}
-                          </span>
+                      </button>
+                      <button 
+                        onClick={() => onDistanceModeChange(distanceMode === 'aimag' ? null : 'aimag')}
+                        className={`p-3 rounded-xl border transition-all text-left group ${
+                          distanceMode === 'aimag' 
+                            ? 'bg-emerald-600 border-emerald-700 shadow-lg shadow-emerald-200' 
+                            : 'bg-white border-gray-100 hover:bg-emerald-50 hover:border-emerald-200'
+                        }`}
+                      >
+                        <div className={`text-[9px] font-black uppercase tracking-widest mb-1 ${distanceMode === 'aimag' ? 'text-emerald-100' : 'text-gray-400 group-hover:text-emerald-400'}`}>Төвөөс</div>
+                        <div className={`text-lg font-black ${distanceMode === 'aimag' ? 'text-white' : 'text-emerald-600'}`}>
+                          {selectedBorder.aimagDistance} <span className={`text-[10px] font-bold uppercase ${distanceMode === 'aimag' ? 'text-emerald-200' : 'text-gray-400'}`}>км</span>
+                        </div>
+                      </button>
+                    </section>
+
+                    {/* Quick Stats Grid */}
+                    <div className="p-4 bg-white rounded-2xl border border-gray-100 grid grid-cols-2 gap-y-4 gap-x-2 shadow-sm">
+                      <div className="space-y-0.5">
+                        <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Зам талбай</div>
+                        <div className="text-sm font-black text-gray-800">{selectedBorder.areaSize?.toLocaleString() || "—"} м²</div>
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Ажиллах хүч</div>
+                        <div className="text-sm font-black text-gray-800">
+                          {(selectedBorder.staffGUAB || 0) + (selectedBorder.staffGUB || 0)} <span className="text-[10px] font-bold text-gray-400">(ГУАБ: {selectedBorder.staffGUAB || 0})</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Infrastructure */}
+                    <section className="space-y-3">
+                      <div className="flex items-center gap-2 pb-1 text-gray-900">
+                        <Building2 className="w-4 h-4 text-blue-600" />
+                        <h3 className="text-[11px] font-black uppercase tracking-[0.2em]">Дэд бүтэц</h3>
+                      </div>
+                      {selectedBorder.infrastructure ? (
+                        <div className="space-y-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                          {selectedBorder.infrastructure.details.map((detail, i) => (
+                            <div key={i} className="flex gap-2.5">
+                              <CornerDownRight className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
+                              <span className="text-xs text-gray-600 leading-snug">{detail}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-center text-[10px] text-gray-400 uppercase font-black">Мэдээлэл байхгүй</div>
+                      )}
+                    </section>
+
+                    {/* Laboratory */}
+                    {selectedBorder.hasLaboratory && (
+                      <section className="space-y-3">
+                        <div className="flex items-center gap-2 pb-1 text-gray-900 font-black">
+                          <span className="text-sm">🔬</span>
+                          <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-teal-600">Шинжилгээ, Лаборатори</h3>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2">
+                          {(selectedBorder.labCapabilities || []).map((cap, i) => (
+                            <div key={i} className="flex items-center gap-3 p-2.5 bg-white border border-gray-100 rounded-xl shadow-sm">
+                              <span className="text-sm">🔬</span>
+                              <span className="text-[11px] font-bold text-gray-700 leading-tight">{cap}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+                  </motion.div>
+                )}
+
+                {activeTab === 'goods' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6 animate-in fade-in duration-300"
+                  >
+                    <div className="flex items-center gap-2 pb-1 text-gray-900">
+                      <Package className="w-4 h-4 text-blue-600" />
+                      <h3 className="text-[11px] font-black uppercase tracking-[0.15em]">Тогтоолын бараа</h3>
+                    </div>
+
+                    {/* IMPORT */}
+                    {selectedBorder.legalImports && selectedBorder.legalImports.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-[9px] font-black text-emerald-700 uppercase tracking-widest bg-emerald-50 px-2 py-1 rounded inline-block">↓ Импорт</div>
+                        <div className="space-y-1.5">
+                          {selectedBorder.legalImports.map((entry, i) => {
+                            const good = GOODS.find(g => g.id === entry.goodId);
+                            return (
+                              <div key={i} onClick={() => good && onShowGoodDetail(good, { import: 'ok' })} className="flex items-start gap-3 p-3 bg-white border border-gray-100 rounded-xl hover:border-emerald-200 cursor-pointer transition-all shadow-sm">
+                                <span className="text-xl flex-shrink-0">{good?.icon || '•'}</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[12px] font-bold text-gray-800 leading-snug">{entry.text}</div>
+                                  <div className="flex flex-wrap gap-1 mt-1.5">
+                                    {entry.resolutions.map((res, j) => (
+                                      <span key={j} className="text-[9px] font-mono font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{res}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
-                    
-                    <div className="p-4 space-y-3">
-                      {!selectedBorder.development.imageUrl && (
-                        <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider border-b border-indigo-50 pb-2">
-                          {selectedBorder.development.projectName}
-                        </div>
-                      )}
-                      
-                      {/* Progress Bar */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] font-bold">
-                          <span className="text-gray-500 uppercase">Гүйцэтгэл</span>
-                          <span className={selectedBorder.development.progress === 100 ? "text-emerald-600" : "text-indigo-600"}>
-                            {selectedBorder.development.progress}%
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                          <div 
-                            className={`h-2 rounded-full transition-all duration-1000 ${selectedBorder.development.progress === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                            style={{ width: `${selectedBorder.development.progress}%` }}
-                          />
+
+                    {/* EXPORT */}
+                    {selectedBorder.legalExports && selectedBorder.legalExports.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-[9px] font-black text-purple-700 uppercase tracking-widest bg-purple-50 px-2 py-1 rounded inline-block">↑ Экспорт</div>
+                        <div className="space-y-1.5">
+                          {selectedBorder.legalExports.map((entry, i) => {
+                            const good = GOODS.find(g => g.id === entry.goodId);
+                            return (
+                              <div key={i} onClick={() => good && onShowGoodDetail(good, { export: 'ok' })} className="flex items-start gap-3 p-3 bg-white border border-gray-100 rounded-xl hover:border-purple-200 cursor-pointer transition-all shadow-sm">
+                                <span className="text-xl flex-shrink-0">{good?.icon || '•'}</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[12px] font-bold text-gray-800 leading-snug">{entry.text}</div>
+                                  <div className="flex flex-wrap gap-1 mt-1.5">
+                                    {entry.resolutions.map((res, j) => (
+                                      <span key={j} className="text-[9px] font-mono font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">{res}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
+                    )}
 
-                      <div className="space-y-1.5 pt-2 border-t border-gray-50">
-                        <div className="flex items-start gap-2">
-                          <span className="text-[9px] font-bold text-gray-400 uppercase w-14 flex-shrink-0">Төсөв:</span>
-                          <span className="text-xs font-bold text-gray-800">{selectedBorder.development.budget}</span>
+                    {/* PROPOSED ADDITIONS */}
+                    {selectedBorder.proposedAdditions && selectedBorder.proposedAdditions.length > 0 && (
+                      <div className="space-y-3 pt-4 border-t border-gray-100 mt-4">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                          <div className="text-[9px] font-black text-orange-700 uppercase tracking-widest">Нэмэх саналтай бараа</div>
                         </div>
-                        {selectedBorder.development.contractor && (
-                          <div className="flex items-start gap-2">
-                            <span className="text-[9px] font-bold text-gray-400 uppercase w-14 flex-shrink-0">Гүйцэтгэгч:</span>
-                            <span className="text-[10px] font-semibold text-gray-600">{selectedBorder.development.contractor}</span>
+                        <div className="space-y-2">
+                          {selectedBorder.proposedAdditions.map((entry, i) => {
+                            const good = GOODS.find(g => g.id === entry.goodId);
+                            return (
+                              <div key={i} className="p-3 bg-orange-50/30 border border-orange-100 rounded-xl">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-sm">{good?.icon}</span>
+                                  <span className="text-[11px] font-bold text-gray-700">{entry.text}</span>
+                                </div>
+                                <div className="flex flex-col gap-1 pl-6">
+                                  <div className="text-[10px] text-gray-500"><span className="font-bold">Зорилт:</span> {entry.targetResolution}</div>
+                                  {entry.proposalNote && (
+                                    <div className="text-[10px] text-gray-500 leading-tight italic">"{entry.proposalNote}"</div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+
+                {activeTab === 'dev' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6 animate-in fade-in duration-300"
+                  >
+                    <div className="flex items-center gap-2 pb-1 text-gray-900">
+                      <span className="text-sm">🏗️</span>
+                      <h3 className="text-[11px] font-black uppercase tracking-[0.2em]">Бүтээн байгуулалт</h3>
+                    </div>
+
+                    {selectedBorder.development ? (
+                      <div className="bg-white rounded-2xl border border-indigo-100 overflow-hidden shadow-sm">
+                        {selectedBorder.development.imageUrl && (
+                          <div className="w-full h-40 bg-gray-100">
+                            <img src={selectedBorder.development.imageUrl} alt={selectedBorder.development.projectName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           </div>
                         )}
-                      </div>
-
-                      <p className="text-[10px] text-gray-500 leading-relaxed pt-2">
-                        {selectedBorder.development.description}
-                      </p>
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              {/* Laboratory Section - Verbatim with Icons */}
-              {selectedBorder.hasLaboratory && (
-                <section className="space-y-4 pt-6 border-t border-gray-100">
-                  <div className="flex items-center gap-2 pb-2">
-                    <div className="p-1.5 bg-teal-50 rounded-lg">
-                      <span className="text-sm">🔬</span>
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-teal-600">Шинжилгээ, Лаборатори</h3>
-                      <p className="text-[9px] text-gray-400 font-bold">{selectedBorder.labCapacity || 'Салбар лаборатори'}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2">
-                    {(selectedBorder.labCapabilities || []).map((cap, i) => {
-                      let icon = "🔬";
-                      if (cap.toLowerCase().includes("хүнс") || cap.toLowerCase().includes("малина") || cap.toLowerCase().includes("ургамал") || cap.toLowerCase().includes("хорио цээр")) icon = "🍱";
-                      if (cap.toLowerCase().includes("хими") || cap.toLowerCase().includes("мансууруулах") || cap.toLowerCase().includes("сэтгэц") || cap.toLowerCase().includes("аюултай бодис")) icon = "🧪";
-                      if (cap.toLowerCase().includes("нүүрс") || cap.toLowerCase().includes("эрдэс") || cap.toLowerCase().includes("газрын тос")) icon = "💎";
-                      if (cap.toLowerCase().includes("архи") || cap.toLowerCase().includes("согтууруулах")) icon = "🍷";
-                      if (cap.toLowerCase().includes("ноос") || cap.toLowerCase().includes("ноолуур")) icon = "🧶";
-
-                      return (
-                        <div key={i} className="flex items-center gap-3 p-2.5 bg-teal-50/30 border border-teal-100/50 rounded-xl">
-                          <span className="text-base">{icon}</span>
-                          <span className="text-[11px] font-bold text-teal-900 leading-tight">{cap}</span>
+                        <div className="p-4 space-y-3">
+                          <div className="text-[12px] font-bold text-gray-900 leading-tight">{selectedBorder.development.projectName}</div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[10px] font-bold">
+                              <span className="text-gray-400 uppercase">Гүйцэтгэл</span>
+                              <span className="text-indigo-600">{selectedBorder.development.progress}%</span>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${selectedBorder.development.progress}%` }} />
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-2 pt-1 border-t border-gray-50">
+                            <span className="text-[9px] font-black text-gray-400 uppercase w-14 flex-shrink-0">Гүйцэтгэгч:</span>
+                            <span className="text-[10px] font-semibold text-gray-600">{selectedBorder.development.contractor}</span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 leading-relaxed italic">{selectedBorder.development.description}</p>
                         </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
-
-              {/* Infrastructure Note for missing labs */}
-              {!selectedBorder.hasLaboratory && (
-                <section className="space-y-3 pt-6 border-t border-gray-100">
-                  <div className="flex items-center gap-2 opacity-60">
-                    <span className="text-sm">🧪</span>
-                    <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400">Шинжилгээний хүчин чадал</h3>
-                  </div>
-                  <div className="p-3 bg-gray-50 border border-dashed border-gray-200 rounded-xl">
-                    <p className="text-[10px] text-gray-500 italic flex items-center gap-2">
-                      <span className="text-xs">⚠️</span> Лаборатори байхгүй. Дээжийг ойролцоо аймаг эсвэл төв лабораторид илгээдэг.
-                    </p>
-                  </div>
-                </section>
-              )}
+                      </div>
+                    ) : (
+                      <div className="p-12 bg-white rounded-2xl border border-dashed border-gray-200 text-center flex flex-col items-center gap-3">
+                        <Building2 className="w-8 h-8 text-gray-300" />
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Төсөл байхгүй</p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </div>
             </motion.div>
           ) : globalFilter.goodId ? (
             /* FILTER SUMMARY MODE */
@@ -787,7 +663,7 @@ export function Sidebar({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="p-5 space-y-8"
+              className="flex-1 overflow-y-auto p-5 space-y-8 custom-scrollbar"
             >
               <div className="p-4 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-100">
                 <div className="flex items-center gap-3 mb-2">
@@ -841,7 +717,7 @@ export function Sidebar({
             </motion.div>
           ) : (
             /* DEFAULT EMPTY MODE */
-            <div className="h-full flex flex-col items-center justify-center p-12 text-center">
+            <div className="flex-1 overflow-y-auto h-full flex flex-col items-center justify-center p-12 text-center custom-scrollbar">
                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6 relative">
                   <MapPin className="w-10 h-10 text-gray-300" />
                   <div className="absolute inset-0 rounded-full border-2 border-dashed border-gray-200 animate-[spin_10s_linear_infinite]" />

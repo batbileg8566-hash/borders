@@ -42,7 +42,13 @@ export default function App() {
 
   const handleSelect = (border: BorderCrossing | null) => {
     setSelectedBorder(border);
-    if (border) setIsSidebarOpen(true);
+    if (border) {
+      setIsSidebarOpen(true);
+      // Auto enable distance mode if not set to show route on selection
+      if (!distanceMode) {
+        setDistanceMode('ub');
+      }
+    }
   };
 
   const handleShowGoodDetail = (good: Good, status: { import?: GoodStatus; export?: GoodStatus }) => {
@@ -125,6 +131,8 @@ export default function App() {
             globalFilter={globalFilter}
             onFilterChange={setGlobalFilter}
             onClose={() => setIsSidebarOpen(false)}
+            distanceMode={distanceMode}
+            onDistanceModeChange={setDistanceMode}
           />
         </div>
         
@@ -156,6 +164,7 @@ export default function App() {
             borders={borderCrossings}
             isOpen={isTableOpen}
             onToggle={() => setIsTableOpen(!isTableOpen)}
+            onSelect={handleSelect}
           />
         </main>
 
