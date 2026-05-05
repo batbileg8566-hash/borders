@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { GOODS, PORT_GOODS, borderCrossings } from "../data";
+import { GOODS, borderCrossings } from "../data";
 import { BorderCrossing } from "../types";
 import { Search, ChevronUp, ChevronDown, Download, Filter, Table as TableIcon } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -183,16 +183,18 @@ export function DataTable({ borders, isOpen, onToggle }: DataTableProps) {
                   <td className="px-6 py-4 font-mono text-xs font-bold text-gray-600 hidden md:table-cell">{border.aimagDistance}</td>
                   <td className="px-6 py-4 hidden md:table-cell">
                     <div className="flex gap-1">
-                      {GOODS.slice(0, 5).map(g => {
-                        const status = PORT_GOODS[border.id]?.[g.id]?.import;
+                      {GOODS.slice(0, 6).map(g => {
+                        const isLegal = border.legalImports?.some(li => li.goodId === g.id);
+                        const isProposed = border.proposedAdditions?.some(pa => pa.goodId === g.id);
+                        const status = isLegal ? 'ok' : isProposed ? 'warn' : null;
+                        
                         return (
                           <div 
                             key={g.id}
-                            title={`${g.name}: ${status || 'Мэдээлэлгүй'}`}
+                            title={`${g.name}: ${status === 'ok' ? 'Зөвшөөрөгдсөн' : status === 'warn' ? 'Саналтай' : 'Мэдээлэлгүй'}`}
                             className={`w-6 h-6 rounded flex items-center justify-center text-[10px] border ${
                               status === 'ok' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' :
                               status === 'warn' ? 'bg-orange-50 border-orange-100 text-orange-600' :
-                              status === 'crit' ? 'bg-red-50 border-red-100 text-red-600' :
                               'bg-gray-50 border-gray-100 text-gray-300'
                             }`}
                           >
@@ -200,7 +202,7 @@ export function DataTable({ borders, isOpen, onToggle }: DataTableProps) {
                           </div>
                         );
                       })}
-                      {GOODS.length > 5 && <span className="text-[10px] text-gray-300 self-center">+{GOODS.length - 5}</span>}
+                      {GOODS.length > 6 && <span className="text-[10px] text-gray-300 self-center">+{GOODS.length - 6}</span>}
                     </div>
                   </td>
                 </tr>

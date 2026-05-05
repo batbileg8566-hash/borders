@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { motion, AnimatePresence } from "motion/react";
 import { MessageSquare, Send, X, Bot, User, Loader2, Sparkles } from "lucide-react";
-import { borderCrossings, GOODS, PORT_GOODS } from "../data";
+import { borderCrossings, GOODS } from "../data";
 import { BorderCrossing } from "../types";
 
 interface Message {
@@ -42,7 +42,10 @@ export function ChatPanel({ selectedBorder, onClose }: { selectedBorder: BorderC
       // Inject context about the selected port
       let context = "";
       if (selectedBorder) {
-        const portGoods = PORT_GOODS[selectedBorder.id] || {};
+        const legalImp = selectedBorder.legalImports?.map(i => i.text).join(', ') || 'Байхгүй';
+        const legalExp = selectedBorder.legalExports?.map(e => e.text).join(', ') || 'Байхгүй';
+        const proposed = selectedBorder.proposedAdditions?.map(p => p.text).join(', ') || 'Байхгүй';
+
         context = `
           Хэрэглэгч ${selectedBorder.name} боомтыг сонгосон байна.
           Боомтын мэдээлэл:
@@ -51,10 +54,9 @@ export function ChatPanel({ selectedBorder, onClose }: { selectedBorder: BorderC
           - Зэрэглэл: ${selectedBorder.operationalStatus}
           - Ачаалал: ${selectedBorder.trafficStatus}
           - Тээвэр: ${selectedBorder.transportTypes.join(', ')}
-          - Бараануудын горим: ${Object.entries(portGoods).map(([gid, status]) => {
-            const g = GOODS.find(good => good.id === gid);
-            return `${g?.name}: Импорт(${status.import}), Экспорт(${status.export})`;
-          }).join('; ')}
+          - Импортлох зөвшөөрөлтэй: ${legalImp}
+          - Экспортлох зөвшөөрөлтэй: ${legalExp}
+          - Нэмэх саналтай: ${proposed}
           
           Хэрэглэгчийн асуулт: ${userMessage}
           
