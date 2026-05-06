@@ -12,8 +12,10 @@ import { ChatPanel } from "./components/ChatPanel";
 import { DataTable } from "./components/DataTable";
 import { borderCrossings } from "./data";
 import { BorderCrossing, Good, GoodStatus, Direction, PortCategory } from "./types";
-import { MessageSquare, MapPin, Scale } from "lucide-react";
+import { MessageSquare, MapPin, Scale, Share2, Camera } from "lucide-react";
 import { SourcesModal } from "./SourcesModal";
+import { ShareModal } from "./components/ShareModal";
+import { AdminImageModal } from "./components/AdminImageModal";
 
 export default function App() {
   const [selectedBorder, setSelectedBorder] = useState<BorderCrossing | null>(null);
@@ -41,8 +43,12 @@ export default function App() {
   const [isTableOpen, setIsTableOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isDevOpen, setIsDevOpen] = useState(false);
 
   const [selectedCategory, setSelectedCategory] = useState<PortCategory>("Боомт");
+
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const filteredCrossings = useMemo(() => {
     // If we're not on "Боомт", we might need more data. 
@@ -137,10 +143,26 @@ export default function App() {
 
           <button 
             onClick={() => setIsSourcesOpen(true)}
-            className="flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-xl bg-gray-900 text-white text-[10px] md:text-[11px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-gray-200 whitespace-nowrap"
+            className="flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-xl bg-gray-900 border border-gray-700 text-white text-[10px] md:text-[11px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-gray-200 whitespace-nowrap"
           >
             <Scale className="w-3.5 h-3.5 md:w-4 md:h-4" />
             <span className="hidden sm:inline">Эх сурвалж</span>
+          </button>
+
+          <button 
+            onClick={() => setIsShareOpen(true)}
+            className="flex items-center justify-center p-2 md:p-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all shadow-sm active:scale-95"
+            title="Хуваалцах"
+          >
+            <Share2 className="w-4 h-4 md:w-5 md:h-5" />
+          </button>
+
+          <button 
+            onClick={() => setIsDevOpen(true)}
+            className="flex items-center justify-center p-2 md:p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:bg-black transition-all shadow-sm active:scale-95"
+            title="Developer Utils"
+          >
+            <Camera className="w-4 h-4 md:w-5 md:h-5" />
           </button>
           </div>
         </div>
@@ -159,6 +181,7 @@ export default function App() {
             onClose={() => setIsSidebarOpen(false)}
             distanceMode={distanceMode}
             onDistanceModeChange={setDistanceMode}
+            refreshTrigger={refreshTrigger}
           />
         </div>
         
@@ -171,6 +194,7 @@ export default function App() {
             globalFilter={globalFilter}
             distanceMode={distanceMode}
             onDistanceModeChange={setDistanceMode}
+            refreshTrigger={refreshTrigger}
           />
           
           {/* Active Zone Indicator Overlay */}
@@ -209,6 +233,25 @@ export default function App() {
       <SourcesModal 
         isOpen={isSourcesOpen}
         onClose={() => setIsSourcesOpen(false)}
+      />
+
+      <ShareModal 
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+      />
+
+      <button 
+        onClick={() => setIsDevOpen(true)}
+        className="fixed bottom-6 right-6 z-[60] w-12 h-12 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all border border-slate-700"
+        title="Admin Image Tools"
+      >
+        <Camera className="w-6 h-6" />
+      </button>
+
+      <AdminImageModal 
+        isOpen={isDevOpen}
+        onClose={() => setIsDevOpen(false)}
+        onUpdate={() => setRefreshTrigger(prev => prev + 1)}
       />
     </div>
   );

@@ -13,7 +13,15 @@ const isValidLatLng = (lat: any, lng: any) => {
   if (typeof lat !== 'number' || typeof lng !== 'number' || !isFinite(lat) || !isFinite(lng)) {
     return false;
   }
-  return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  // Be permissive: as long as one is a valid lat and both together make a valid pair (even if swapped)
+  const isOption1 = lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  const isOption2 = lng >= -90 && lng <= 90 && lat >= -180 && lat <= 180;
+  return isOption1 || isOption2;
+};
+
+const getLatLng = (lat: number, lng: number): [number, number] => {
+  if (lat > 90 || lat < -90) return [lng, lat];
+  return [lat, lng];
 };
 
 function RoutesLayer({ selectedBorder }: { selectedBorder: BorderCrossing | null }) {
@@ -29,11 +37,12 @@ function RoutesLayer({ selectedBorder }: { selectedBorder: BorderCrossing | null
     }
 
     const fetchRoutes = async () => {
-      if (!isValidLatLng(selectedBorder.lat, selectedBorder.lng)) return;
+      const [lat, lng] = getLatLng(selectedBorder.lat, selectedBorder.lng);
+      if (!isValidLatLng(lat, lng)) return;
 
       // UB Route
       try {
-        const ubUrl = `https://router.project-osrm.org/route/v1/driving/${selectedBorder.lng},${selectedBorder.lat};${UB_LNG},${UB_LAT}?overview=full&geometries=geojson`;
+        const ubUrl = `https://router.project-osrm.org/route/v1/driving/${lng},${lat};${UB_LNG},${UB_LAT}?overview=full&geometries=geojson`;
         const res = await fetch(ubUrl);
         const data = await res.json();
         if (isMounted && data.code === 'Ok' && data.routes?.[0]) {
@@ -42,13 +51,17 @@ function RoutesLayer({ selectedBorder }: { selectedBorder: BorderCrossing | null
         }
       } catch (e) { 
         // Fallback to straight line if OSRM fails
-        if (isMounted) setUbCoords([[selectedBorder.lat, selectedBorder.lng], [UB_LAT, UB_LNG]]);
+        if (isMounted) setUbCoords([[lat, lng], [UB_LAT, UB_LNG]]);
       }
 
       // Aimag Route
-      if (isValidLatLng(selectedBorder.aimagLat, selectedBorder.aimagLng)) {
+      const [aimagLat, aimagLng] = selectedBorder.aimagLat && selectedBorder.aimagLng 
+        ? getLatLng(selectedBorder.aimagLat, selectedBorder.aimagLng) 
+        : [null, null];
+
+      if (aimagLat !== null && aimagLng !== null && isValidLatLng(aimagLat, aimagLng)) {
         try {
-          const aimagUrl = `https://router.project-osrm.org/route/v1/driving/${selectedBorder.lng},${selectedBorder.lat};${selectedBorder.aimagLng},${selectedBorder.aimagLat}?overview=full&geometries=geojson`;
+          const aimagUrl = `https://router.project-osrm.org/route/v1/driving/${lng},${lat};${aimagLng},${aimagLat}?overview=full&geometries=geojson`;
           const res = await fetch(aimagUrl);
           const data = await res.json();
           if (isMounted && data.code === 'Ok' && data.routes?.[0]) {
@@ -57,7 +70,7 @@ function RoutesLayer({ selectedBorder }: { selectedBorder: BorderCrossing | null
           }
         } catch (e) {
             // Fallback to straight line
-            if (isMounted) setAimagCoords([[selectedBorder.lat, selectedBorder.lng], [selectedBorder.aimagLat!, selectedBorder.aimagLng!]]);
+            if (isMounted) setAimagCoords([[lat, lng], [aimagLat, aimagLng]]);
         }
       } else {
         setAimagCoords([]);
@@ -113,20 +126,6 @@ const getMarkerColor = (id: string, status: string, goodStatus?: GoodStatus) => 
   }
 };
 
-const GOOD_LAB_KEYWORDS: Record<string, string[]> = {
-  plant: ['ургамал', 'хорио цээр', 'хүнс'],
-  animal: ['хорио цээр', 'хүнс'],
-  embryo: ['хорио цээр'],
-  meat: ['мах', 'хүнс', 'хүнсний'],
-  medicine: ['мансууруулах', 'сэтгэцэд', 'эм'],
-  chemical: ['химийн'],
-  explosive: ['химийн', 'тэсэрч'],
-  alcohol: ['архи', 'согтууруулах'],
-  pesticide: ['химийн', 'ургамал'],
-  gmo: ['хүнс', 'химийн'],
-  oil: ['тос']
-};
-
 const createCustomIcon = (
   border: BorderCrossing, 
   isSelected: boolean, 
@@ -134,17 +133,15 @@ const createCustomIcon = (
   isProposed?: boolean,
   goodIcon?: string, 
   goodStatus?: GoodStatus,
-  distanceMode?: 'ub' | 'aimag' | null,
+  distanceMode?: "ub" | "aimag" | null,
 ) => {
   let color = getMarkerColor(border.id, border.operationalStatus, goodStatus);
   const pinSize = isSelected ? 42 : 32;
   
-  // Maintain the awesome proposed logic
   if (isProposed) color = "#f97316"; 
 
-  // Distances Pill
   if (isSelected && distanceMode) {
-    const dist = distanceMode === 'ub' ? border.ubDistance : border.aimagDistance;
+    const dist = distanceMode === "ub" ? border.ubDistance : border.aimagDistance;
     return L.divIcon({
       className: "distance-pill-icon bg-transparent border-0",
       html: `
@@ -154,12 +151,15 @@ const createCustomIcon = (
         </div>
       `,
       iconSize: [80, 40],
-      iconAnchor: [40, 40], // Anchored to bottom center
+      iconAnchor: [40, 40],
     });
   }
 
-  // Standard Pin
   const hasLab = border.hasLaboratory;
+  const customGoodImages = JSON.parse(localStorage.getItem('customGoodImages') || '{}');
+  const defaultLogo = customGoodImages['_default'] || "data:image/webp;base64,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";
+  const customGoodIcon = goodId ? customGoodImages[goodId] : null;
+
   return L.divIcon({
     className: "custom-port-icon bg-transparent border-0",
     html: `
@@ -169,17 +169,21 @@ const createCustomIcon = (
           <circle cx="12" cy="9" r="6" fill="white" />
           ${isProposed ? `<circle cx="12" cy="9" r="8" fill="none" stroke="#f97316" stroke-width="2" />` : ''}
         </svg>
-        <div style="position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; width: ${pinSize * 0.65}px; height: ${pinSize * 0.65}px; background: white; border-radius: 50%; box-shadow: inset 0 1px 3px rgba(0,0,0,0.15);">
-          ${goodIcon 
-            ? `<span style="font-size: ${pinSize * 0.4}px; line-height: 1;">${goodIcon}</span>` 
-            : `<img src="/customs-logo.png" alt="Customs" style="width: 85%; height: 85%; object-fit: contain;" />`
+        
+        <div style="position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; width: ${pinSize * 0.6}px; height: ${pinSize * 0.6}px; background: white; border-radius: 50%; overflow: hidden;">
+          ${customGoodIcon
+            ? `<img src="${customGoodIcon}" style="width: 80%; height: 80%; object-fit: contain;" />`
+            : goodIcon 
+              ? `<span style="font-size: ${pinSize * 0.4}px; line-height: 1; text-align: center;">${goodIcon}</span>` 
+              : `<img src="${defaultLogo}" style="width: 80%; height: 80%; object-fit: contain;" />`
           }
         </div>
+        
         ${hasLab ? `<div style="position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: #14b8a6; border-radius: 50%; border: 2px solid white;"></div>` : ''}
       </div>
     `,
     iconSize: [pinSize, pinSize],
-    iconAnchor: [pinSize / 2, pinSize], // PERFECTLY ANCHORED to the bottom tip of the SVG
+    iconAnchor: [pinSize / 2, pinSize],
   });
 };
 
@@ -216,10 +220,12 @@ function BorderMarker({ border, isSelected, isProposed, selectedGood, goodStatus
 
   if (!isValidLatLng(border.lat, border.lng)) return null;
 
+  const pos = getLatLng(border.lat, border.lng);
+
   return (
     <Marker
       ref={markerRef}
-      position={[border.lat, border.lng]}
+      position={pos}
       icon={createCustomIcon(border, isSelected, selectedGood?.id || null, isProposed, selectedGood?.icon, goodStatus, distanceMode)}
       eventHandlers={{
         click: () => onSelect(border),
@@ -312,7 +318,7 @@ function BorderMarker({ border, isSelected, isProposed, selectedGood, goodStatus
   );
 }
 
-export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, distanceMode }: BorderMapProps) {
+export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, distanceMode, refreshTrigger }: BorderMapProps) {
   const mongoliaCenter: [number, number] = [46.8625, 103.8467];
   const selectedGood = GOODS.find(g => g.id === globalFilter.goodId);
 
@@ -342,7 +348,10 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
         />
         
         {selectedBorder && isValidLatLng(selectedBorder.lat, selectedBorder.lng) ? (
-          <ChangeView lat={selectedBorder.lat} lng={selectedBorder.lng} zoom={8} />
+          (() => {
+            const [lat, lng] = getLatLng(selectedBorder.lat, selectedBorder.lng);
+            return <ChangeView lat={lat} lng={lng} zoom={8} />;
+          })()
         ) : (
           <ChangeView lat={mongoliaCenter[0]} lng={mongoliaCenter[1]} zoom={5} />
         )}
@@ -357,7 +366,7 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
 
           return (
             <BorderMarker
-              key={border.id}
+              key={`${border.id}-${refreshTrigger}`}
               border={border}
               isSelected={selectedBorder?.id === border.id}
               isProposed={isProposed && !isLegalMatch}
@@ -388,7 +397,7 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
   );
 }
 
-interface BorderMapProps {
+export interface BorderMapProps {
   borders: BorderCrossing[];
   selectedBorder: BorderCrossing | null;
   onSelect: (border: BorderCrossing | null) => void;
@@ -398,4 +407,5 @@ interface BorderMapProps {
   };
   distanceMode: 'ub' | 'aimag' | null;
   onDistanceModeChange: (mode: 'ub' | 'aimag' | null) => void;
+  refreshTrigger?: number;
 }

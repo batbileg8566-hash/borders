@@ -18,6 +18,7 @@ interface SidebarProps {
   onClose?: () => void;
   distanceMode: 'ub' | 'aimag' | null;
   onDistanceModeChange: (mode: 'ub' | 'aimag' | null) => void;
+  refreshTrigger?: number;
 }
 
 const statusLabelMap: Record<GoodStatus, string> = {
@@ -65,7 +66,8 @@ export function Sidebar({
   onFilterChange,
   onClose,
   distanceMode,
-  onDistanceModeChange
+  onDistanceModeChange,
+  refreshTrigger
 }: SidebarProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -77,7 +79,12 @@ export function Sidebar({
   }, [selectedBorder?.id]);
   
   const selectedGood = useMemo(() => GOODS.find(g => g.id === globalFilter.goodId), [globalFilter.goodId]);
-  const displayImage = selectedBorder?.imageUrl || selectedBorder?.development?.imageUrl;
+  
+  const displayImage = useMemo(() => {
+    if (!selectedBorder) return null;
+    const customImages = JSON.parse(localStorage.getItem('customPortImages') || '{}');
+    return customImages[selectedBorder.id] || selectedBorder.imageUrl || selectedBorder.development?.imageUrl;
+  }, [selectedBorder, globalFilter, refreshTrigger]); 
 
   const handleExportExcel = () => {
     const data = borders.map(b => ({
@@ -190,7 +197,7 @@ export function Sidebar({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="p-5 border-b border-gray-100 bg-gray-50/80 space-y-4 overflow-hidden"
+            className="p-5 border-b border-gray-100 bg-gray-50/50 space-y-4"
           >
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
@@ -220,25 +227,33 @@ export function Sidebar({
             </div>
             
             <div className="grid grid-cols-1 gap-1.5 max-h-[220px] overflow-y-auto pr-1 select-none custom-scrollbar">
-              {GOODS.map((g) => {
-                const isActive = globalFilter.goodId === g.id;
-                
-                const importCount = borders.filter(b => b.legalImports?.some(li => li.goodId === g.id)).length;
-                const exportCount = borders.filter(b => b.legalExports?.some(le => le.goodId === g.id)).length;
+              {(() => {
+                const customGoodImages = JSON.parse(localStorage.getItem('customGoodImages') || '{}');
+                return GOODS.map((g) => {
+                  const isActive = globalFilter.goodId === g.id;
+                  
+                  const importCount = borders.filter(b => b.legalImports?.some(li => li.goodId === g.id)).length;
+                  const exportCount = borders.filter(b => b.legalExports?.some(le => le.goodId === g.id)).length;
 
-                return (
-                  <div 
-                    key={g.id} 
-                    className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
-                      isActive ? "bg-white border-blue-200 shadow-sm" : "bg-transparent border-transparent hover:bg-gray-200/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-base flex-shrink-0">{g.icon}</span>
-                      <span className={`text-[10px] font-bold leading-tight ${isActive ? 'text-blue-600' : 'text-gray-600'}`}>
-                        {g.name}
-                      </span>
-                    </div>
+                  return (
+                    <div 
+                      key={g.id} 
+                      className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
+                        isActive ? "bg-white border-blue-200 shadow-sm" : "bg-transparent border-transparent hover:bg-gray-200/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
+                          {customGoodImages[g.id] ? (
+                            <img src={customGoodImages[g.id]} className="w-full h-full object-contain" />
+                          ) : (
+                            <span className="text-base leading-none">{g.icon}</span>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-bold leading-tight ${isActive ? 'text-blue-600' : 'text-gray-600'}`}>
+                          {g.name}
+                        </span>
+                      </div>
                     <div className="flex gap-1">
                       {(['import', 'export'] as Direction[]).map(dir => {
                         const isDirActive = isActive && globalFilter.direction === dir;
@@ -262,9 +277,10 @@ export function Sidebar({
                       })}
                     </div>
                   </div>
-                )
-              })}
-            </div>
+                );
+              })
+            })()}
+          </div>
           </motion.div>
         )}
       </AnimatePresence>
