@@ -80,3 +80,15 @@ html, body, #root {
 .custom-info-popup {
   margin-bottom: 25px; /* Pull it up from the pin */
 }
+
+/* LEAFLET TOOLTIP CLEANUP */
+.leaflet-tooltip.custom-tooltip-container {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.leaflet-tooltip-top.custom-tooltip-container:before {
+  display: none !important;
+}

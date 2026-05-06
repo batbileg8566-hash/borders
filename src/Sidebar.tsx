@@ -77,6 +77,7 @@ export function Sidebar({
   }, [selectedBorder?.id]);
   
   const selectedGood = useMemo(() => GOODS.find(g => g.id === globalFilter.goodId), [globalFilter.goodId]);
+  const displayImage = selectedBorder?.imageUrl || selectedBorder?.development?.imageUrl;
 
   const handleExportExcel = () => {
     const data = borders.map(b => ({
@@ -415,16 +416,33 @@ export function Sidebar({
                     animate={{ opacity: 1, y: 0 }}
                     className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300"
                   >
-                    {/* Header Image inside Info Tab if exists */}
-                    {selectedBorder.imageUrl && (
-                      <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm aspect-video bg-gray-50 flex items-center justify-center relative mb-6">
+                    {/* Unified Header Image inside Info Tab */}
+                    {displayImage && (
+                      <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm aspect-video bg-gray-50 flex items-center justify-center relative mb-6 group">
                         <img 
-                          src={selectedBorder.imageUrl} 
+                          src={displayImage} 
                           alt={selectedBorder.name} 
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-opacity duration-300"
                           referrerPolicy="no-referrer"
+                          onLoad={(e) => { e.currentTarget.style.opacity = '1'; }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const placeholder = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (placeholder) placeholder.style.display = 'flex';
+                          }}
+                          style={{ opacity: 0 }}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                        {/* Custom Error Placeholder */}
+                        <div 
+                          className="hidden absolute inset-0 flex-col items-center justify-center text-gray-400 p-8 bg-gray-100"
+                          style={{ display: 'none' }}
+                        >
+                          <svg className="w-10 h-10 mb-2 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span className="text-[10px] font-bold uppercase tracking-widest">Зураг олдсонгүй</span>
+                        </div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                       </div>
                     )}
 
@@ -435,33 +453,38 @@ export function Sidebar({
                     )}
 
                     {/* Distances */}
-                    <section className="grid grid-cols-2 gap-3">
-                      <button 
-                        onClick={() => onDistanceModeChange(distanceMode === 'ub' ? null : 'ub')}
-                        className={`p-3 rounded-xl border transition-all text-left group ${
-                          distanceMode === 'ub' 
-                            ? 'bg-blue-600 border-blue-700 shadow-lg shadow-blue-200' 
-                            : 'bg-white border-gray-100 hover:bg-blue-50 hover:border-blue-200'
-                        }`}
-                      >
-                        <div className={`text-[9px] font-black uppercase tracking-widest mb-1 ${distanceMode === 'ub' ? 'text-blue-100' : 'text-gray-400 group-hover:text-blue-400'}`}>УБ хотоос</div>
-                        <div className={`text-lg font-black ${distanceMode === 'ub' ? 'text-white' : 'text-blue-600'}`}>
-                          {selectedBorder.ubDistance} <span className={`text-[10px] font-bold uppercase ${distanceMode === 'ub' ? 'text-blue-200' : 'text-gray-400'}`}>км</span>
+                    <section className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <span className="text-sm">🏢</span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Улаанбаатар хүртэл</span>
+                            <span className="text-sm font-black text-blue-600">{selectedBorder.ubDistance} км</span>
+                          </div>
                         </div>
-                      </button>
-                      <button 
-                        onClick={() => onDistanceModeChange(distanceMode === 'aimag' ? null : 'aimag')}
-                        className={`p-3 rounded-xl border transition-all text-left group ${
-                          distanceMode === 'aimag' 
-                            ? 'bg-emerald-600 border-emerald-700 shadow-lg shadow-emerald-200' 
-                            : 'bg-white border-gray-100 hover:bg-emerald-50 hover:border-emerald-200'
-                        }`}
-                      >
-                        <div className={`text-[9px] font-black uppercase tracking-widest mb-1 ${distanceMode === 'aimag' ? 'text-emerald-100' : 'text-gray-400 group-hover:text-emerald-400'}`}>Төвөөс</div>
-                        <div className={`text-lg font-black ${distanceMode === 'aimag' ? 'text-white' : 'text-emerald-600'}`}>
-                          {selectedBorder.aimagDistance} <span className={`text-[10px] font-bold uppercase ${distanceMode === 'aimag' ? 'text-emerald-200' : 'text-gray-400'}`}>км</span>
+                        <div className="flex items-center gap-3 pr-2">
+                           <div className="w-6 h-0.5 bg-blue-600/30 rounded-full"></div>
                         </div>
-                      </button>
+                      </div>
+
+                      {selectedBorder.aimagDistance && (
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                              <span className="text-sm">🏘️</span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Аймгийн төв хүртэл</span>
+                              <span className="text-sm font-black text-emerald-600">{selectedBorder.aimagDistance} км</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 pr-2">
+                             <div className="w-6 h-0.5 bg-emerald-600/50 rounded-full"></div>
+                          </div>
+                        </div>
+                      )}
                     </section>
 
                     {/* Quick Stats Grid */}
@@ -503,7 +526,7 @@ export function Sidebar({
                       <section className="space-y-3">
                         <div className="flex items-center gap-2 pb-1 text-gray-900 font-black">
                           <span className="text-sm">🔬</span>
-                          <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-teal-600">Шинжилгээ, Лаборатори</h3>
+                          <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-teal-600">Гаалийн салбар лаборатори</h3>
                         </div>
                         <div className="grid grid-cols-1 gap-2">
                           {(selectedBorder.labCapabilities || []).map((cap, i) => (

@@ -33,45 +33,39 @@ export function ChatPanel({ selectedBorder, onClose }: { selectedBorder: BorderC
     setIsLoading(true);
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        throw new Error("VITE_GEMINI_API_KEY is not defined");
+        throw new Error("GEMINI_API_KEY is not defined");
       }
       const genAI = new GoogleGenerativeAI(apiKey);
       
-      // Inject context about the selected port
-      let context = "";
-      if (selectedBorder) {
-        const legalImp = selectedBorder.legalImports?.map(i => i.text).join(', ') || 'Байхгүй';
-        const legalExp = selectedBorder.legalExports?.map(e => e.text).join(', ') || 'Байхгүй';
-        const proposed = selectedBorder.proposedAdditions?.map(p => p.text).join(', ') || 'Байхгүй';
+      // Generate a compressed string of ALL ports for the AI to reference
+      const globalDatabase = borderCrossings.map(b => {
+        const imports = b.legalImports?.map(i => i.text).join(', ') || 'Байхгүй';
+        const exports = b.legalExports?.map(e => e.text).join(', ') || 'Байхгүй';
+        const labs = b.hasLaboratory ? (b.labCapabilities?.join(', ') || 'Тийм') : 'Байхгүй';
+        const proposed = b.proposedAdditions?.map(p => p.text).join(', ') || 'Байхгүй';
+        return `[Боомт: ${b.name}] Байршил: ${b.region}, Статус: ${b.operationalStatus}. Лаборатори: ${labs}. Импортлох бараа: ${imports}. Экспортлох бараа: ${exports}. Нэмэх саналтай: ${proposed}.`;
+      }).join('\n');
 
-        context = `
-          Хэрэглэгч ${selectedBorder.name} боомтыг сонгосон байна.
-          Боомтын мэдээлэл:
-          - Нэр: ${selectedBorder.name}
-          - Аймаг: ${selectedBorder.region}
-          - Зэрэглэл: ${selectedBorder.operationalStatus}
-          - Ачаалал: ${selectedBorder.trafficStatus}
-          - Тээвэр: ${selectedBorder.transportTypes.join(', ')}
-          - Импортлох зөвшөөрөлтэй: ${legalImp}
-          - Экспортлох зөвшөөрөлтэй: ${legalExp}
-          - Нэмэх саналтай: ${proposed}
-          
-          Хэрэглэгчийн асуулт: ${userMessage}
-          
-          Та боомтын мэргэжилтэн шиг хариулна уу. Зөвхөн энэ боомтын мэдээлэлд тулгуурлаж хариулна уу.
-        `;
-      } else {
-        context = `
-          Хэрэглэгч ямар нэгэн боомт сонгоогүй байна. 
-          Та хэрэглэгчээс "Та эхлээд газрын зураг эсвэл жагсаалтаас боомтоо сонгоно уу" гэж эелдэгээр хүснэ үү.
-          Хэрэглэгчийн асуулт: ${userMessage}
-        `;
-      }
+      const systemPrompt = `
+You are a professional, highly intelligent Customs and Border Port Assistant for Mongolia. 
+You have access to the following global database of all border ports:
+
+DATABASE:
+${globalDatabase}
+
+INSTRUCTIONS:
+1. You MUST answer the user's question directly using the DATABASE above. 
+2. NEVER tell the user to "select a port first" or "I cannot answer". If they ask about a specific port by name (e.g., "Шивээхүрэн", "Гашуунсухайт"), find it in the DATABASE and give a precise, helpful answer immediately.
+3. If a port is currently selected in the UI, its name is: ${selectedBorder?.name || 'None selected'}. You can prioritize this context if the user says "энэ боомт" (this port).
+4. Always answer in clear, polite Mongolian language.
+
+USER QUESTION: ${userMessage}
+`;
 
       const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-      const result = await model.generateContent(context);
+      const result = await model.generateContent(systemPrompt);
       const response = await result.response;
       const responseText = response.text() || "Уучлаарай, хариулт авахад алдаа гарлаа.";
       setMessages(prev => [...prev, { role: "model", text: responseText }]);

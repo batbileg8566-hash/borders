@@ -1,5 +1,6 @@
 export type OperationalStatus = "Олон улсын" | "Хоёр талын" | "Түр ажиллагаатай";
 export type TrafficStatus = "Хэвийн" | "Ачаалалтай" | "Квот тулсан";
+export type PortCategory = "Боомт" | "Гүний гааль" | "Хяналтын бүс" | "Баталгаат бүс" | "Чөлөөт бүс";
 export type PortTransportType = "Автозам" | "Төмөр зам" | "AGV" | "Агаар";
 export type GoodStatus = "ok" | "warn" | "crit";
 export type Direction = "import" | "export";
@@ -55,6 +56,7 @@ export interface BorderCrossing {
   controlZonesCount?: number; // Хяналтын бүсийн тоо
   imageUrl?: string; // Боомтын зураг
   description?: string; // Дэлгэрэнгүй тайлбар
+  category?: PortCategory;
   infrastructure?: Infrastructure;
   hasLaboratory?: boolean;
   labCapabilities?: string[];
