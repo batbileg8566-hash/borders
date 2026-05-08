@@ -1,0 +1,58 @@
+import { BorderCrossing } from "../types";
+
+export const CONTROL_ZONES: BorderCrossing[] = [
+  {
+    id: 'control-zone-general',
+    name: 'УБ - Төрөл бүрийн барааны хяналтын бүс',
+    region: 'Улаанбаатар',
+    direction: 'Дотоод',
+    category: 'Хяналтын бүс',
+    subCategory: 'Төрөл бүрийн барааны',
+    lat: 47.92,
+    lng: 106.92,
+    ubDistance: 10,
+    aimagDistance: 0,
+    operationalStatus: 'Олон улсын',
+    trafficStatus: 'Хэвийн',
+    transportTypes: ['Автозам'],
+    capacity: 1000,
+    legalImports: [],
+    legalExports: []
+  },
+  {
+    id: 'control-zone-mining',
+    name: 'Оюу Толгой - Уул уурхайн бүтээгдэхүүний хяналтын бүс',
+    region: 'Өмнөговь',
+    direction: 'Урд',
+    category: 'Хяналтын бүс',
+    subCategory: 'Уул уурхайн бүтээгдэхүүний',
+    lat: 43.01,
+    lng: 106.85,
+    ubDistance: 650,
+    aimagDistance: 45,
+    operationalStatus: 'Олон улсын',
+    trafficStatus: 'Хэвийн',
+    transportTypes: ['Автозам'],
+    capacity: 5000,
+    legalImports: [],
+    legalExports: []
+  },
+  {
+    id: 'control-zone-oil',
+    name: 'Төв аймаг - Газрын тосны хяналтын бүс',
+    region: 'Төв',
+    direction: 'Дотоод',
+    category: 'Хяналтын бүс',
+    subCategory: 'Газрын тосны',
+    lat: 47.30,
+    lng: 106.90,
+    ubDistance: 60,
+    aimagDistance: 0,
+    operationalStatus: 'Олон улсын',
+    trafficStatus: 'Хэвийн',
+    transportTypes: ['Автозам'],
+    capacity: 2000,
+    legalImports: [],
+    legalExports: []
+  },
+];

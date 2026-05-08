@@ -82,9 +82,8 @@ export function Sidebar({
   
   const displayImage = useMemo(() => {
     if (!selectedBorder) return null;
-    const customImages = JSON.parse(localStorage.getItem('customPortImages') || '{}');
-    return customImages[selectedBorder.id] || selectedBorder.imageUrl || selectedBorder.development?.imageUrl;
-  }, [selectedBorder, globalFilter, refreshTrigger]); 
+    return selectedBorder.imageUrl || selectedBorder.development?.imageUrl;
+  }, [selectedBorder]); 
 
   const handleExportExcel = () => {
     const data = borders.map(b => ({
@@ -304,7 +303,7 @@ export function Sidebar({
               }}
               className="w-full bg-white border border-gray-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans cursor-pointer shadow-sm"
             >
-              <option value="all">Бүх боомт (All)</option>
+              <option value="all">Бүх боомт</option>
               {borders.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}

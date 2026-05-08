@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { motion, AnimatePresence } from "motion/react";
 import { MessageSquare, Send, X, Bot, User, Loader2, Sparkles } from "lucide-react";
-import { borderCrossings, GOODS } from "../data";
+import { borderCrossings } from "../data";
 import { BorderCrossing } from "../types";
 
 interface Message {
@@ -37,37 +37,58 @@ export function ChatPanel({ selectedBorder, onClose }: { selectedBorder: BorderC
       if (!apiKey) {
         throw new Error("GEMINI_API_KEY is not defined");
       }
-      const genAI = new GoogleGenerativeAI(apiKey);
+      const ai = new GoogleGenAI({ apiKey });
       
       // Generate a compressed string of ALL ports for the AI to reference
       const globalDatabase = borderCrossings.map(b => {
+        const category = b.category || 'Боомт';
+        const sub = b.subCategory || '';
         const imports = b.legalImports?.map(i => i.text).join(', ') || 'Байхгүй';
         const exports = b.legalExports?.map(e => e.text).join(', ') || 'Байхгүй';
         const labs = b.hasLaboratory ? (b.labCapabilities?.join(', ') || 'Тийм') : 'Байхгүй';
         const proposed = b.proposedAdditions?.map(p => p.text).join(', ') || 'Байхгүй';
-        return `[Боомт: ${b.name}] Байршил: ${b.region}, Статус: ${b.operationalStatus}. Лаборатори: ${labs}. Импортлох бараа: ${imports}. Экспортлох бараа: ${exports}. Нэмэх саналтай: ${proposed}.`;
+        return `[${category}${sub ? ' / ' + sub : ''}: ${b.name}] Байршил: ${b.region}, Статус: ${b.operationalStatus}. Лаборатори: ${labs}. Импорт: ${imports}. Экспорт: ${exports}. Нэмэх санал: ${proposed}.`;
       }).join('\n');
 
       const systemPrompt = `
 You are a professional, highly intelligent Customs and Border Port Assistant for Mongolia. 
-You have access to the following global database of all border ports:
+You have access to the following global database of all border ports, deep customs, and economic zones:
 
 DATABASE:
 ${globalDatabase}
 
 INSTRUCTIONS:
 1. You MUST answer the user's question directly using the DATABASE above. 
-2. NEVER tell the user to "select a port first" or "I cannot answer". If they ask about a specific port by name (e.g., "Шивээхүрэн", "Гашуунсухайт"), find it in the DATABASE and give a precise, helpful answer immediately.
-3. If a port is currently selected in the UI, its name is: ${selectedBorder?.name || 'None selected'}. You can prioritize this context if the user says "энэ боомт" (this port).
+2. NEVER tell the user to "select a port first" or "I cannot answer". If they ask about a specific port by name, find it in the DATABASE and give a precise, helpful answer immediately.
+3. If a port is currently selected in the UI, its name is: ${selectedBorder?.name || 'Сонгогдоогүй байна'}. You can prioritize this context if the user says "энэ боомт" (this port).
 4. Always answer in clear, polite Mongolian language.
+5. You have information on:
+- 23 border crossings (Боомт)
+- Deep customs offices (Гүний гааль)
+- Control zones (Хяналтын бүс)
+- Bonded zones (Баталгаат бүс)
+- Free zones (Чөлөөт бүс)
 
 USER QUESTION: ${userMessage}
 `;
 
-      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-      const result = await model.generateContent(systemPrompt);
-      const response = await result.response;
-      const responseText = response.text() || "Уучлаарай, хариулт авахад алдаа гарлаа.";
+      // Build conversation history for the SDK
+      const history = messages.map(m => ({
+        role: m.role === 'user' ? 'user' as const : 'model' as const,
+        parts: [{ text: m.text }],
+      }));
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [
+          { role: "user", parts: [{ text: systemPrompt }] },
+          { role: "model", parts: [{ text: "Ойлголоо. Хариултаа Монгол хэлээр өгье." }] },
+          ...history,
+          { role: "user", parts: [{ text: userMessage }] },
+        ],
+      });
+
+      const responseText = response.text || "Уучлаарай, хариулт авахад алдаа гарлаа.";
       setMessages(prev => [...prev, { role: "model", text: responseText }]);
     } catch (error) {
       console.error("Gemini Error:", error);

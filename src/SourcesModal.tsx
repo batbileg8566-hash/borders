@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
 import { X, ExternalLink, FileText } from "lucide-react";
-import { GOVERNMENT_RESOLUTIONS } from "./constants";
+import { REGULATIONS } from "./data";
 
 interface SourcesModalProps {
   isOpen: boolean;
@@ -50,36 +50,43 @@ export function SourcesModal({ isOpen, onClose }: SourcesModalProps) {
 
               {/* Content */}
               <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
-                {GOVERNMENT_RESOLUTIONS.map((res, idx) => (
-                  <div key={res.id} className="group relative">
+                {Object.entries(REGULATIONS).map(([key, res], idx) => (
+                  <div key={key} className="group relative">
                     <div className="flex gap-4">
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-xs font-black text-gray-400 border border-gray-100 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-colors">
                         {idx + 1}
                       </div>
                       <div className="flex-1 space-y-2">
                         <h3 className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
-                          {res.title}
+                          {res.number} ({res.date})
                         </h3>
                         <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                          {res.description}
+                          {res.fullName}
                         </p>
-                        {res.additional && (
+                        {res.amendments && res.amendments.length > 0 && (
                           <div className="text-[10px] text-gray-400 leading-relaxed italic border-l-2 border-gray-100 pl-3 py-0.5">
-                            {res.additional}
+                            Нэмэлт: {res.amendments.join(', ')}
                           </div>
                         )}
-                        <a
-                          href={res.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 pt-1"
-                        >
-                          Тогтоолыг үзэх
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
+                        {res.legalBasis && (
+                           <div className="text-[10px] text-gray-500 leading-relaxed font-bold uppercase tracking-wider">
+                             Үндэслэл: {res.legalBasis}
+                           </div>
+                        )}
+                        {res.legalUrl && (
+                          <a
+                            href={res.legalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 pt-1"
+                          >
+                            Тогтоолыг үзэх
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
                       </div>
                     </div>
-                    {idx < GOVERNMENT_RESOLUTIONS.length - 1 && (
+                    {idx < Object.keys(REGULATIONS).length - 1 && (
                       <div className="mt-6 border-b border-gray-50 ml-12" />
                     )}
                   </div>
@@ -89,7 +96,7 @@ export function SourcesModal({ isOpen, onClose }: SourcesModalProps) {
               {/* Footer */}
               <div className="p-6 bg-gray-50 border-t border-gray-100 flex items-center justify-between shrink-0">
                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                   Сүүлийн шинэчлэл: 2024
+                   Сүүлийн шинэчлэл: 2026
                  </p>
                  <button
                    onClick={onClose}

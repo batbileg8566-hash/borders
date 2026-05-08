@@ -20,7 +20,10 @@ const isValidLatLng = (lat: any, lng: any) => {
 };
 
 const getLatLng = (lat: number, lng: number): [number, number] => {
-  if (lat > 90 || lat < -90) return [lng, lat];
+  if (!isValidLatLng(lat, lng)) return [47.9200, 106.9200]; // Default to UB if invalid
+  // Mongolia Latitude is ~41-52, Longitude is ~87-120
+  // If the first value is > 70, it's definitely the Longitude
+  if (lat > 70) return [lng, lat];
   return [lat, lng];
 };
 
@@ -147,7 +150,7 @@ const createCustomIcon = (
       html: `
         <div style="background: white; border: 2.5px solid ${color}; border-radius: 20px; padding: 4px 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); white-space: nowrap; display: flex; align-items: center; gap: 6px; transform: scale(1.1); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; z-index: 1000; bottom: 10px;">
           <span style="font-size: 14px; font-weight: 900; color: ${color}">${dist}</span>
-          <span style="font-size: 9px; font-weight: 800; color: #94a3b8;">KM</span>
+          <span style="font-size: 9px; font-weight: 800; color: #94a3b8;">КМ</span>
         </div>
       `,
       iconSize: [80, 40],
@@ -178,8 +181,6 @@ const createCustomIcon = (
               : `<img src="${defaultLogo}" style="width: 80%; height: 80%; object-fit: contain;" />`
           }
         </div>
-        
-        ${hasLab ? `<div style="position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: #14b8a6; border-radius: 50%; border: 2px solid white;"></div>` : ''}
       </div>
     `,
     iconSize: [pinSize, pinSize],
@@ -218,9 +219,14 @@ function BorderMarker({ border, isSelected, isProposed, selectedGood, goodStatus
     }
   }, [isSelected]);
 
-  if (!isValidLatLng(border.lat, border.lng)) return null;
+  if (!isValidLatLng(border.lat, border.lng)) {
+    console.warn(`Invalid coordinates for ${border.name || border.id}:`, border.lat, border.lng);
+    return null;
+  }
 
   const pos = getLatLng(border.lat, border.lng);
+  
+  if (!isValidLatLng(pos[0], pos[1])) return null;
 
   return (
     <Marker
@@ -366,7 +372,7 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
 
           return (
             <BorderMarker
-              key={`${border.id}-${refreshTrigger}`}
+              key={`${border.id}-${border.lat}-${border.lng}`}
               border={border}
               isSelected={selectedBorder?.id === border.id}
               isProposed={isProposed && !isLegalMatch}

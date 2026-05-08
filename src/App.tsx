@@ -3,16 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo } from "react";
-import { AnimatePresence } from "motion/react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Sidebar } from "./Sidebar";
 import { BorderMap } from "./BorderMap";
 import { LegalDetailModal } from "./LegalDetailModal";
 import { ChatPanel } from "./components/ChatPanel";
 import { DataTable } from "./components/DataTable";
 import { borderCrossings } from "./data";
+import { getSupabase } from "./lib/supabase";
 import { BorderCrossing, Good, GoodStatus, Direction, PortCategory } from "./types";
-import { MessageSquare, MapPin, Scale, Share2, Camera } from "lucide-react";
+import { MessageSquare, MapPin, Scale, Share2, Settings, ChevronDown } from "lucide-react";
 import { SourcesModal } from "./SourcesModal";
 import { ShareModal } from "./components/ShareModal";
 import { AdminImageModal } from "./components/AdminImageModal";
@@ -45,19 +46,213 @@ export default function App() {
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isDevOpen, setIsDevOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setHoveredCategory(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const [selectedCategory, setSelectedCategory] = useState<PortCategory>("Боомт");
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+  const [hoveredCategory, setHoveredCategory] = useState<PortCategory | null>(null);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [overrides, setOverrides] = useState<{
+    ports: Record<string, any>;
+    goods: Record<string, any>;
+  }>({ ports: {}, goods: {} });
+
+  const MENU_STRUCTURE: Record<PortCategory, string[]> = {
+    "Боомт": ["Автозам", "Төмөр зам", "Агаар", "AGV"],
+    "Гүний гааль": [
+      "Улаанбаатар хот дахь гаалийн газар",
+      "Орхон аймаг дахь гаалийн газар",
+      "Дархан дахь гаалийн газар",
+      "Сайншанд дахь гаалийн газар",
+      "Чойр дахь салбар",
+      "Айраг дахь салбар",
+      "Бор-Өндөр дахь салбар",
+      "Улс хоорондын шуудан илгээмжийн гаалийн газар"
+    ],
+    "Хяналтын бүс": [
+      "Төрөл бүрийн барааны",
+      "Уул уурхайн бүтээгдэхүүний",
+      "Газрын тосны",
+      "Химийн болон цацраг идэвхит",
+      "Катерингийн үйлчилгээний",
+      "Шуудан илгээмжийн"
+    ],
+    "Баталгаат бүс": [
+      "Баталгаат агуулах",
+      "Баталгаат үйлдвэрийн газар",
+      "Баталгаат үзэсгэлэнгийн газар",
+      "Баталгаат барилгын талбай",
+      "Татваргүй барааны дэлгүүр",
+      "Гаалийн тусгай бүс"
+    ],
+    "Чөлөөт бүс": [
+      "Алтанбулаг",
+      "Замын-Үүд",
+      "Цагааннуур",
+      "Хөшгийн хөндийн"
+    ]
+  };
+
+  // Fetch Overrides
+  useEffect(() => {
+    async function fetchOverrides() {
+      const supabase = getSupabase();
+      if (!supabase) return;
+
+      try {
+        const { data: genericData, error: genericError } = await supabase
+          .from('custom_overrides')
+          .select('*');
+        
+        if (genericError) console.error('Fetch Overrides Error:', genericError);
+
+        const { data: imageData, error: imageError } = await supabase
+          .from('custom_images')
+          .select('*');
+
+        if (imageError) console.warn('Fetch Legacy Images Error:', imageError);
+
+        const newPorts: Record<string, any> = {};
+        const newGoods: Record<string, any> = {};
+
+        const safeNumber = (val: any, fallback?: number) => {
+          if (val === undefined || val === null || val === '') return fallback;
+          const n = Number(val);
+          if (isNaN(n) || !isFinite(n)) return fallback;
+          return n;
+        };
+
+        // Merge legacy images first
+        if (imageData) {
+          imageData.forEach(item => {
+            if (item.category === 'port') {
+              newPorts[item.entity_id] = { imageUrl: item.image_url };
+            } else if (item.category === 'good') {
+              newGoods[item.entity_id] = item.image_url;
+            }
+          });
+        }
+
+        // Merge Generic Overrides (newer data prevails)
+        if (genericData) {
+          genericData.forEach(item => {
+            if (item.category === 'port') {
+              const data = item.data || {};
+              newPorts[item.entity_id] = { 
+                ...newPorts[item.entity_id], 
+                ...data,
+                updated_at: item.updated_at,
+                lat: safeNumber(data.lat, newPorts[item.entity_id]?.lat),
+                lng: safeNumber(data.lng, newPorts[item.entity_id]?.lng),
+                ubDistance: safeNumber(data.ubDistance, newPorts[item.entity_id]?.ubDistance),
+                aimagDistance: safeNumber(data.aimagDistance, newPorts[item.entity_id]?.aimagDistance)
+              };
+            } else if (item.category === 'good') {
+              newGoods[item.entity_id] = item.data?.imageUrl || newGoods[item.entity_id];
+            }
+          });
+        }
+
+        // 3. Merge Local Storage Overrides (highest priority for development)
+        const localData = JSON.parse(localStorage.getItem('LOCAL_OVERRIDES_DATA') || '{}');
+        Object.entries(localData).forEach(([key, data]) => {
+          const [cat, id] = key.split(':');
+          if (cat === 'port') {
+            const d = data as any;
+            newPorts[id] = { 
+              ...newPorts[id], 
+              ...d,
+              lat: safeNumber(d.lat, newPorts[id]?.lat),
+              lng: safeNumber(d.lng, newPorts[id]?.lng),
+              ubDistance: safeNumber(d.ubDistance, newPorts[id]?.ubDistance),
+              aimagDistance: safeNumber(d.aimagDistance, newPorts[id]?.aimagDistance)
+            };
+          } else if (cat === 'good') {
+            newGoods[id] = (data as any).imageUrl || newGoods[id];
+          }
+        });
+
+        console.log('Processed overrides for ports:', Object.keys(newPorts));
+        setOverrides({ ports: newPorts, goods: newGoods });
+        console.log('Final merged overrides:', { ports: Object.keys(newPorts).length, goods: Object.keys(newGoods).length });
+
+        // Sync to localStorage for components still using it (optional, but good for stability)
+        localStorage.setItem('customPortImages', JSON.stringify(
+          Object.fromEntries(Object.entries(newPorts).map(([id, data]) => [id, data.imageUrl]))
+        ));
+        localStorage.setItem('customGoodImages', JSON.stringify(newGoods));
+
+      } catch (err) {
+        console.warn('Failed to fetch overrides:', err);
+      }
+    }
+
+    fetchOverrides();
+  }, [refreshTrigger]);
+
+  const mergedBorderCrossings = useMemo(() => {
+    return borderCrossings.map(port => {
+      const override = overrides.ports[port.id];
+      if (override) {
+        const merged = { ...port, ...override };
+        // Final sanity check: if something became NaN, revert to original
+        if (isNaN(merged.lat)) merged.lat = port.lat;
+        if (isNaN(merged.lng)) merged.lng = port.lng;
+        return merged;
+      }
+      return port;
+    });
+  }, [overrides.ports]);
+
+  const currentSelectedBorder = useMemo(() => {
+    if (!selectedBorder) return null;
+    return mergedBorderCrossings.find(b => b.id === selectedBorder.id) || selectedBorder;
+  }, [selectedBorder, mergedBorderCrossings]);
+
+  // Sync selected border if its data changes
+  useEffect(() => {
+    if (currentSelectedBorder) {
+      const latest = mergedBorderCrossings.find(b => b.id === currentSelectedBorder.id);
+      if (latest && (latest.lat !== currentSelectedBorder.lat || latest.lng !== currentSelectedBorder.lng)) {
+        console.log(`Syncing selected border ${latest.name} coordinates to:`, latest.lat, latest.lng);
+        setSelectedBorder({ ...latest }); // Force new object ref
+      }
+    }
+  }, [mergedBorderCrossings, currentSelectedBorder]);
 
   const filteredCrossings = useMemo(() => {
-    // If we're not on "Боомт", we might need more data. 
-    // Currently, all existing data in borderCrossings are "Боомт" (ports).
+    let base = mergedBorderCrossings;
+    
+    // 1. Filter by Main Category
     if (selectedCategory === "Боомт") {
-      return borderCrossings.filter(b => !b.category || b.category === "Боомт");
+      base = base.filter(b => !b.category || b.category === "Боомт");
+    } else {
+      base = base.filter(b => b.category === selectedCategory);
     }
-    return borderCrossings.filter(b => b.category === selectedCategory);
-  }, [selectedCategory]);
+
+    // 2. Filter by Sub Category if selected
+    if (selectedSubCategory) {
+      if (selectedCategory === "Боомт") {
+        // Special case for Boomt: filter by transport types
+        base = base.filter(b => b.transportTypes.includes(selectedSubCategory as any));
+      } else {
+        base = base.filter(b => b.subCategory === selectedSubCategory);
+      }
+    }
+
+    return base;
+  }, [mergedBorderCrossings, selectedCategory, selectedSubCategory]);
 
   const handleSelect = (border: BorderCrossing | null) => {
     setSelectedBorder(border);
@@ -89,7 +284,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-full bg-[#f3f4f6] overflow-hidden transition-all duration-300">
       {/* Header */}
-      <header className="h-16 shrink-0 bg-white border-b border-[#e5e7eb] flex items-center px-4 md:px-6 justify-between z-20 shadow-sm">
+      <header className="h-16 shrink-0 bg-white border-b border-[#e5e7eb] flex items-center px-4 md:px-6 justify-between z-30 shadow-sm">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
             <svg width="20" height="20" className="md:w-6 md:h-6" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -97,9 +292,14 @@ export default function App() {
               <circle cx="12" cy="10" r="3" />
             </svg>
           </div>
-          <h1 className="text-sm md:text-xl font-bold tracking-tight text-[#111827] uppercase line-clamp-1">
-            Боомтын Хяналтын Систем
-          </h1>
+          <div className="flex flex-col">
+            <h1 className="text-sm md:text-xl font-bold tracking-tight text-[#111827] uppercase line-clamp-1">
+              Боомтын Хяналтын Систем
+            </h1>
+            {selectedSubCategory && (
+               <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{selectedSubCategory}</span>
+            )}
+          </div>
         </div>
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -107,24 +307,80 @@ export default function App() {
           >
             <MapPin className="w-5 h-5" />
           </button>
-          <div className="flex gap-2 md:gap-8 items-center">
-          <div className="hidden md:flex p-1 bg-gray-100 rounded-xl gap-0.5 md:gap-1">
+          <div className="flex gap-2 md:gap-8 items-center" ref={menuRef}>
+          <div className="hidden md:flex p-1 bg-gray-100 rounded-xl gap-0.5 md:gap-1 relative z-50">
             {categories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => {
-                  setSelectedCategory(cat);
-                  setSelectedBorder(null);
-                  setIsSidebarOpen(false);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-tight transition-all ${
-                  selectedCategory === cat 
-                    ? "bg-white text-blue-600 shadow-sm ring-1 ring-black/5" 
-                    : "text-gray-500 hover:text-gray-900"
-                }`}
+              <div 
+                key={cat} 
+                className="relative"
               >
-                {cat}
-              </button>
+                <button
+                  onClick={() => {
+                    if (hoveredCategory === cat) {
+                      setHoveredCategory(null);
+                    } else {
+                      setHoveredCategory(cat);
+                      setSelectedCategory(cat);
+                      setSelectedSubCategory(null);
+                      setSelectedBorder(null);
+                      setIsSidebarOpen(false);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-tight transition-all flex items-center gap-1 ${
+                    selectedCategory === cat 
+                      ? "bg-white text-blue-600 shadow-sm ring-1 ring-black/5" 
+                      : "text-gray-500 hover:text-gray-900"
+                  }`}
+                >
+                  {cat}
+                  <ChevronDown className={`w-3 h-3 transition-transform ${hoveredCategory === cat ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {hoveredCategory === cat && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute top-full left-0 mt-1 min-w-[200px] bg-white border border-gray-100 rounded-xl shadow-2xl p-2 z-[60] overflow-hidden"
+                    >
+                      <div className="flex flex-col gap-1">
+                        {MENU_STRUCTURE[cat].map(sub => (
+                          <button
+                            key={sub}
+                            onClick={() => {
+                              setSelectedCategory(cat);
+                              setSelectedSubCategory(sub);
+                              setSelectedBorder(null);
+                              setIsSidebarOpen(false);
+                              setHoveredCategory(null);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-tight transition-all ${
+                              selectedSubCategory === sub 
+                                ? "bg-blue-50 text-blue-600" 
+                                : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                            }`}
+                          >
+                            {sub}
+                          </button>
+                        ))}
+                        {/* Clear Filter Option */}
+                        <div className="h-px bg-gray-100 my-1" />
+                        <button
+                          onClick={() => {
+                            setSelectedCategory(cat);
+                            setSelectedSubCategory(null);
+                            setHoveredCategory(null);
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-lg text-[9px] font-black text-gray-400 uppercase tracking-widest hover:text-red-500 transition-all font-mono"
+                        >
+                          Бүгдийг харах
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             ))}
           </div>
 
@@ -156,14 +412,6 @@ export default function App() {
           >
             <Share2 className="w-4 h-4 md:w-5 md:h-5" />
           </button>
-
-          <button 
-            onClick={() => setIsDevOpen(true)}
-            className="flex items-center justify-center p-2 md:p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:bg-black transition-all shadow-sm active:scale-95"
-            title="Developer Utils"
-          >
-            <Camera className="w-4 h-4 md:w-5 md:h-5" />
-          </button>
           </div>
         </div>
       </header>
@@ -173,7 +421,7 @@ export default function App() {
         <div className={`${isSidebarOpen ? 'translate-y-0' : 'translate-y-full md:translate-y-0'} fixed md:relative bottom-0 left-0 right-0 z-50 md:z-10 transition-transform duration-500`}>
           <Sidebar 
             borders={filteredCrossings} 
-            selectedBorder={selectedBorder} 
+            selectedBorder={currentSelectedBorder} 
             onSelect={handleSelect} 
             onShowGoodDetail={handleShowGoodDetail}
             globalFilter={globalFilter}
@@ -189,7 +437,7 @@ export default function App() {
         <main className="flex-1 relative overflow-hidden bg-[#e2e8f0]">
           <BorderMap 
             borders={filteredCrossings} 
-            selectedBorder={selectedBorder} 
+            selectedBorder={currentSelectedBorder} 
             onSelect={handleSelect} 
             globalFilter={globalFilter}
             distanceMode={distanceMode}
@@ -205,7 +453,7 @@ export default function App() {
                </div>
                <div className="mt-0.5 md:mt-1 flex items-center gap-1.5 md:gap-2">
                   <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                  <span className="text-[8px] md:text-[10px] font-mono text-gray-500 font-bold uppercase">Сул • {filteredCrossings.length} нэгж</span>
+                  <span className="text-[8px] md:text-[10px] font-mono text-gray-500 font-bold uppercase">Идэвхтэй • {filteredCrossings.length} нэгж</span>
                </div>
             </div>
           </div>
@@ -219,7 +467,7 @@ export default function App() {
         </main>
 
         <AnimatePresence>
-          {isChatOpen && <ChatPanel selectedBorder={selectedBorder} onClose={() => setIsChatOpen(false)} />}
+          {isChatOpen && <ChatPanel selectedBorder={currentSelectedBorder} onClose={() => setIsChatOpen(false)} />}
         </AnimatePresence>
       </div>
 
@@ -242,16 +490,18 @@ export default function App() {
 
       <button 
         onClick={() => setIsDevOpen(true)}
-        className="fixed bottom-6 right-6 z-[60] w-12 h-12 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all border border-slate-700"
-        title="Admin Image Tools"
+        className="fixed bottom-6 right-6 z-[9999] flex items-center justify-center w-12 h-12 bg-white text-gray-400 rounded-full shadow-lg hover:bg-white hover:text-blue-600 hover:scale-110 active:scale-95 transition-all border border-gray-100 group"
+        style={{ zIndex: 99999 }}
+        title="Тохиргоо"
       >
-        <Camera className="w-6 h-6" />
+        <Settings className="w-6 h-6 transition-transform group-hover:rotate-90 duration-500" />
       </button>
 
       <AdminImageModal 
         isOpen={isDevOpen}
         onClose={() => setIsDevOpen(false)}
         onUpdate={() => setRefreshTrigger(prev => prev + 1)}
+        currentBorders={mergedBorderCrossings}
       />
     </div>
   );

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { GOODS, borderCrossings } from "../data";
 import { BorderCrossing } from "../types";
-import { Search, ChevronUp, ChevronDown, Download, Filter, Table as TableIcon } from "lucide-react";
+import { Search, ChevronUp, ChevronDown, Download, Filter, Table as TableIcon, Printer } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { utils, writeFile } from 'xlsx';
 
 interface DataTableProps {
   borders: BorderCrossing[];
@@ -45,27 +46,34 @@ export function DataTable({ borders, isOpen, onToggle, onSelect }: DataTableProp
     }));
   };
 
-  const exportToCSV = () => {
-    const headers = ["Name", "Region", "Operational Status", "Traffic Status", "UB Distance (km)", "Aimag Distance (km)"];
-    const rows = filteredAndSortedBorders.map(b => [
-      b.name,
-      b.region,
-      b.operationalStatus,
-      b.trafficStatus,
-      b.ubDistance,
-      b.aimagDistance
-    ]);
+  const exportToExcel = () => {
+    const dataToExport = filteredAndSortedBorders.map(b => ({
+      'Нэр': b.name,
+      'Аймаг': b.region,
+      'Чиглэл': b.direction,
+      'Ангилал': b.category || 'Боомт',
+      'Дэд ангилал': b.subCategory || '-',
+      'УБ-аас (км)': b.ubDistance,
+      'Статус': b.operationalStatus,
+      'Тээвэр': b.transportTypes.join(', '),
+      'Хүчин чадал': b.capacity
+    }));
+    
+    const ws = utils.json_to_sheet(dataToExport);
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, ws, "Borders Data");
+    writeFile(wb, `Mongolia_Borders_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "border_crossings_data.csv");
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const hasUrgency = (border: BorderCrossing) => {
+    return border.proposedAdditions?.some(p => 
+      p.proposalNote?.includes('Лаборатори') || 
+      p.proposalNote?.includes('Хорио цээр')
+    );
   };
 
   return (
@@ -97,13 +105,20 @@ export function DataTable({ borders, isOpen, onToggle, onSelect }: DataTableProp
               className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500/20 transition-all font-medium"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 print:hidden">
             <button 
-              onClick={exportToCSV}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-600 uppercase hover:bg-gray-50 shadow-sm transition-all"
+              onClick={exportToExcel}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-lg text-[10px] font-bold text-emerald-600 uppercase hover:bg-emerald-100 shadow-sm transition-all"
             >
               <Download className="w-3.5 h-3.5" />
-              CSV Экспорт
+              Excel Экспорт
+            </button>
+            <button 
+              onClick={handlePrint}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-[10px] font-bold text-gray-600 uppercase hover:bg-gray-100 shadow-sm transition-all"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Хэвлэх
             </button>
             <button className="p-2 bg-white border border-gray-200 rounded-lg text-gray-400 hover:text-blue-600 shadow-sm transition-all">
               <Filter className="w-4 h-4" />
@@ -188,26 +203,30 @@ export function DataTable({ borders, isOpen, onToggle, onSelect }: DataTableProp
                   <td className="px-6 py-4 font-mono text-xs font-bold text-gray-600 hidden md:table-cell">{border.aimagDistance}</td>
                   <td className="px-6 py-4 hidden md:table-cell">
                     <div className="flex gap-1">
-                      {GOODS.slice(0, 6).map(g => {
+                      {GOODS.slice(0, 8).map(g => {
                         const isLegal = border.legalImports?.some(li => li.goodId === g.id);
                         const isProposed = border.proposedAdditions?.some(pa => pa.goodId === g.id);
                         const status = isLegal ? 'ok' : isProposed ? 'warn' : null;
+                        const urgent = isProposed && hasUrgency(border);
                         
                         return (
                           <div 
                             key={g.id}
                             title={`${g.name}: ${status === 'ok' ? 'Зөвшөөрөгдсөн' : status === 'warn' ? 'Саналтай' : 'Мэдээлэлгүй'}`}
-                            className={`w-6 h-6 rounded flex items-center justify-center text-[10px] border ${
+                            className={`w-6 h-6 rounded flex items-center justify-center text-[10px] border relative ${
                               status === 'ok' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' :
                               status === 'warn' ? 'bg-orange-50 border-orange-100 text-orange-600' :
                               'bg-gray-50 border-gray-100 text-gray-300'
-                            }`}
+                            } ${urgent ? 'ring-2 ring-red-500 ring-offset-1 animate-pulse' : ''}`}
                           >
                             {g.icon}
+                            {urgent && (
+                              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                            )}
                           </div>
                         );
                       })}
-                      {GOODS.length > 6 && <span className="text-[10px] text-gray-300 self-center">+{GOODS.length - 6}</span>}
+                      {GOODS.length > 8 && <span className="text-[10px] text-gray-300 self-center">+{GOODS.length - 8}</span>}
                     </div>
                   </td>
                 </tr>

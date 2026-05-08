@@ -57,6 +57,7 @@ export interface BorderCrossing {
   imageUrl?: string; // Боомтын зураг
   description?: string; // Дэлгэрэнгүй тайлбар
   category?: PortCategory;
+  subCategory?: string;
   infrastructure?: Infrastructure;
   hasLaboratory?: boolean;
   labCapabilities?: string[];
@@ -65,8 +66,6 @@ export interface BorderCrossing {
   legalExports: LegalGoodEntry[];
   proposedAdditions?: ProposedAddition[];
 }
-
-export type PortGoodsMatrix = Record<string, Record<string, { import?: GoodStatus; export?: GoodStatus }>>;
 
 export interface LegalGoodEntry {
   goodId: string;            // matches GOODS[].id (e.g., 'plant', 'medicine')
