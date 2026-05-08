@@ -52,6 +52,8 @@ export interface BorderCrossing {
   staffGUAB?: number; // ГУАБ тоо
   staffGUB?: number; // ГУБ тоо
   labCapacity?: string; // Лабораторын хүчин чадал
+  customsLabInfo?: string; // Гаалийн салбар лабораторын мэдээлэл
+  testedGoodsInfo?: string; // Шинжилгээ хийдэг барааны мэдээлэл
   warehousesCount?: number; // Агуулахын тоо
   controlZonesCount?: number; // Хяналтын бүсийн тоо
   imageUrl?: string; // Боомтын зураг

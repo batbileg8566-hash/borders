@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { BorderCrossing, Good, GoodStatus, Direction } from "./types";
 import { GOODS } from "./data";
-import { Package, MapPin, CheckCircle2, AlertTriangle, Building2, Filter, ArrowRight, CornerDownRight, X, ChevronLeft, ChevronRight, FileDown } from "lucide-react";
+import { Package, MapPin, CheckCircle2, AlertTriangle, Building2, Filter, ArrowRight, CornerDownRight, X, ChevronLeft, ChevronRight, FileDown, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import * as XLSX from 'xlsx';
 
@@ -72,6 +72,7 @@ export function Sidebar({
   const [searchTerm, setSearchTerm] = useState("");
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'goods' | 'dev'>('info');
+  const [expandedSection, setExpandedSection] = useState<'goods' | 'ports' | null>('goods');
 
   // Reset tab to 'info' when a new border is selected
   React.useEffect(() => {
@@ -101,6 +102,8 @@ export function Sidebar({
       'Агуулахын тоо': b.warehousesCount || 0,
       'Хяналтын бүсийн тоо': b.controlZonesCount || 0,
       'Лаборатори': b.hasLaboratory ? `Тийм (${b.labCapacity || 'Салбар'})` : 'Үгүй',
+      'Гаалийн салбар лаборатори': b.customsLabInfo || '—',
+      'Шинжилгээ хийдэг бараа': b.testedGoodsInfo || '—',
       'Лабораторын үзүүлэлтүүд': b.labCapabilities?.join('; ') || '—',
       'Импортлох зөвшөөрөгдсөн бараа': b.legalImports?.map(li => `• ${li.text} [${li.resolutions.join(', ')}]${li.conditions ? ` (${li.conditions})` : ''}`).join('\n') || '—',
       'Экспортлох зөвшөөрөгдсөн бараа': b.legalExports?.map(le => `• ${le.text} [${le.resolutions.join(', ')}]${le.conditions ? ` (${le.conditions})` : ''}`).join('\n') || '—',
@@ -189,138 +192,212 @@ export function Sidebar({
         </button>
       </div>
 
-      {/* Global Filter Bar */}
+      {/* Global Filter Bar & Port Selector Container */}
       <AnimatePresence>
         {!isCollapsed && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="p-5 border-b border-gray-100 bg-gray-50/50 space-y-4"
-          >
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-blue-600" />
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest font-mono">
-                  Бараагаар шүүх
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleExportExcel}
-                  className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-[9px] font-black uppercase hover:bg-emerald-100 transition-colors"
-                  title="Мэдээллийг Excel-ээр татах"
-                >
-                  <FileDown className="w-3 h-3" />
-                  Excel татах
-                </button>
-                {globalFilter.goodId && (
-                  <button 
-                    onClick={() => onFilterChange({ goodId: null, direction: "import" })}
-                    className="text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase"
-                  >
-                    Цэвэрлэх
-                  </button>
-                )}
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-1.5 max-h-[220px] overflow-y-auto pr-1 select-none custom-scrollbar">
-              {(() => {
-                const customGoodImages = JSON.parse(localStorage.getItem('customGoodImages') || '{}');
-                return GOODS.map((g) => {
-                  const isActive = globalFilter.goodId === g.id;
-                  
-                  const importCount = borders.filter(b => b.legalImports?.some(li => li.goodId === g.id)).length;
-                  const exportCount = borders.filter(b => b.legalExports?.some(le => le.goodId === g.id)).length;
+          <div className="flex flex-col shrink-0 border-b border-gray-100">
+            {/* Goods Filter Section */}
+            <div className="flex flex-col bg-white">
+              <button 
+                onClick={() => setExpandedSection(expandedSection === 'goods' ? null : 'goods')}
+                className={`w-full h-14 px-5 flex items-center justify-between transition-all duration-300 group outline-none ${
+                  expandedSection === 'goods' ? 'bg-gray-50' : 'hover:bg-gray-50/80'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg transition-all duration-300 ${
+                    expandedSection === 'goods' ? 'bg-blue-600 bg-opacity-10 text-blue-600 shadow-sm' : 'bg-gray-100 text-gray-400 group-hover:text-gray-500'
+                  }`}>
+                    <Filter className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col items-start leading-none">
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.15em] font-mono">
+                      Бараагаар шүүх
+                    </span>
+                    {globalFilter.goodId && !expandedSection && (
+                      <span className="text-[9px] font-bold text-blue-600 mt-0.5">
+                        {selectedGood?.name} сонгогдсон
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                   {globalFilter.goodId && !expandedSection && (
+                    <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[8px] rounded-full font-black shadow-sm">1</span>
+                  )}
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${expandedSection === 'goods' ? 'rotate-180 text-blue-600' : ''}`} />
+                </div>
+              </button>
 
-                  return (
-                    <div 
-                      key={g.id} 
-                      className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
-                        isActive ? "bg-white border-blue-200 shadow-sm" : "bg-transparent border-transparent hover:bg-gray-200/50"
-                      }`}
+              <motion.div 
+                initial={false}
+                animate={{ 
+                  height: expandedSection === 'goods' ? 'auto' : 0,
+                  opacity: expandedSection === 'goods' ? 1 : 0
+                }}
+                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden bg-gray-50/30"
+              >
+                <div className="px-4 pb-5 pt-2">
+                  <div className="flex items-center justify-between px-1 mb-4">
+                    <button 
+                      onClick={handleExportExcel}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-emerald-700 border border-emerald-100 rounded-lg text-[9px] font-black uppercase hover:bg-emerald-50 hover:border-emerald-200 transition-all shadow-sm active:scale-95"
+                      title="Мэдээллийг Excel-ээр татах"
                     >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
-                          {customGoodImages[g.id] ? (
-                            <img src={customGoodImages[g.id]} className="w-full h-full object-contain" />
-                          ) : (
-                            <span className="text-base leading-none">{g.icon}</span>
-                          )}
-                        </div>
-                        <span className={`text-[10px] font-bold leading-tight ${isActive ? 'text-blue-600' : 'text-gray-600'}`}>
-                          {g.name}
-                        </span>
-                      </div>
-                    <div className="flex gap-1">
-                      {(['import', 'export'] as Direction[]).map(dir => {
-                        const isDirActive = isActive && globalFilter.direction === dir;
-                        const count = dir === 'import' ? importCount : exportCount;
+                      <FileDown className="w-3.5 h-3.5" />
+                      Excel татах
+                    </button>
+                    {globalFilter.goodId && (
+                      <button 
+                        onClick={() => onFilterChange({ goodId: null, direction: "import" })}
+                        className="px-2.5 py-1.5 text-[9px] font-black text-rose-500 hover:bg-rose-50 rounded-lg uppercase tracking-wider transition-all"
+                      >
+                        Шүүлтүүр цэвэрлэх
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-1 select-none overflow-y-auto max-h-[320px] pr-1 custom-scrollbar">
+                    {(() => {
+                      const customGoodImages = JSON.parse(localStorage.getItem('customGoodImages') || '{}');
+                      return GOODS.map((g) => {
+                        const isActive = globalFilter.goodId === g.id;
+                        const importCount = borders.filter(b => b.legalImports?.some(li => li.goodId === g.id)).length;
+                        const exportCount = borders.filter(b => b.legalExports?.some(le => le.goodId === g.id)).length;
+
                         return (
-                          <button
-                            key={dir}
-                            onClick={() => onFilterChange({ goodId: g.id, direction: dir })}
-                            className={`px-2 py-1 rounded text-[9px] font-black uppercase transition-all flex items-center gap-1 ${
-                              isDirActive 
-                                ? "bg-blue-600 text-white shadow-md shadow-blue-200" 
-                                : "bg-gray-200 text-gray-500 hover:bg-gray-300"
+                          <div 
+                            key={g.id} 
+                            className={`flex items-center justify-between p-2 rounded-xl border transition-all duration-300 ${
+                              isActive ? "bg-white border-blue-200 shadow-md translate-x-1" : "bg-transparent border-transparent hover:bg-white hover:border-gray-200"
                             }`}
                           >
-                            {dir === 'import' ? 'Имп' : 'Экс'}
-                            <span className={`opacity-60 text-[8px] font-mono ${isDirActive ? 'text-white' : 'text-gray-400'}`}>
-                              {count}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-blue-50' : 'bg-gray-100/50'}`}>
+                                {customGoodImages[g.id] ? (
+                                  <img src={customGoodImages[g.id]} className="w-5 h-5 object-contain" />
+                                ) : (
+                                  <span className="text-lg leading-none">{g.icon}</span>
+                                )}
+                              </div>
+                              <span className={`text-[11px] font-bold leading-tight truncate ${isActive ? 'text-blue-700' : 'text-gray-600'}`}>
+                                {g.name}
+                              </span>
+                            </div>
+                            <div className="flex gap-1">
+                              {(['import', 'export'] as Direction[]).map(dir => {
+                                const isDirActive = isActive && globalFilter.direction === dir;
+                                const count = dir === 'import' ? importCount : exportCount;
+                                return (
+                                  <button
+                                    key={dir}
+                                    onClick={() => onFilterChange({ goodId: g.id, direction: dir })}
+                                    className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 shadow-sm active:scale-90 ${
+                                      isDirActive 
+                                        ? "bg-blue-600 text-white shadow-blue-200" 
+                                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                    }`}
+                                  >
+                                    {dir === 'import' ? 'Имп' : 'Экс'}
+                                    <span className={`text-[8px] font-black ${isDirActive ? 'text-blue-200' : 'text-gray-400'}`}>
+                                      {count}
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
-                );
-              })
-            })()}
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Port Selector Section */}
+            <div className="flex flex-col bg-white border-t border-gray-100">
+              <button 
+                onClick={() => setExpandedSection(expandedSection === 'ports' ? null : 'ports')}
+                className={`w-full h-14 px-5 flex items-center justify-between transition-all duration-300 group outline-none ${
+                  expandedSection === 'ports' ? 'bg-gray-50' : 'hover:bg-gray-50/80'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg transition-all duration-300 ${
+                    expandedSection === 'ports' ? 'bg-blue-600 bg-opacity-10 text-blue-600 shadow-sm' : 'bg-gray-100 text-gray-400 group-hover:text-gray-500'
+                  }`}>
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col items-start leading-none">
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.15em] font-mono">
+                      Боомтоор сонгох
+                    </span>
+                    {selectedBorder && !expandedSection && (
+                      <span className="text-[9px] font-bold text-blue-600 mt-0.5">
+                        {selectedBorder.name} сонгогдсон
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                   {selectedBorder && !expandedSection && (
+                    <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[8px] rounded-full font-black shadow-sm">1</span>
+                  )}
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${expandedSection === 'ports' ? 'rotate-180 text-blue-600' : ''}`} />
+                </div>
+              </button>
+
+              <motion.div 
+                initial={false}
+                animate={{ 
+                  height: expandedSection === 'ports' ? 'auto' : 0,
+                  opacity: expandedSection === 'ports' ? 1 : 0
+                }}
+                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden bg-gray-50/30"
+              >
+                <div className="px-4 pb-5 pt-2">
+                  <div className="grid grid-cols-1 gap-1 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                    <button
+                      onClick={() => {
+                        onSelect(null);
+                        setExpandedSection(null);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all flex items-center gap-3 border ${
+                        !selectedBorder 
+                          ? 'bg-white border-blue-200 text-blue-700 shadow-md translate-x-1' 
+                          : 'bg-transparent border-transparent hover:bg-white hover:border-gray-200 text-gray-500'
+                      }`}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${!selectedBorder ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'}`} />
+                      Бүх боомт
+                    </button>
+                    {borders.map((b) => (
+                      <button
+                        key={b.id}
+                        onClick={() => {
+                          onSelect(b);
+                          setExpandedSection(null);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all flex items-center gap-3 border ${
+                          selectedBorder?.id === b.id 
+                            ? 'bg-white border-blue-200 text-blue-700 shadow-md translate-x-1' 
+                            : 'bg-transparent border-transparent hover:bg-white hover:border-gray-200 text-gray-500'
+                        }`}
+                      >
+                        <div className={`w-2 h-2 rounded-full ${selectedBorder?.id === b.id ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-gray-300'}`} />
+                        {b.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
           </div>
-          </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Port Selector */}
-      <div className={`p-5 border-b border-gray-100 bg-white shadow-sm z-10 transition-all ${isCollapsed ? 'px-2' : ''}`}>
-        {!isCollapsed ? (
-          <>
-            <label className="text-[10px] font-bold text-[#4b5563] uppercase tracking-wider mb-2 block font-mono">
-              Боомт сонгох
-            </label>
-            <select
-              value={selectedBorder?.id || "all"}
-              onChange={(e) => {
-                if (e.target.value === "all") {
-                  onSelect(null);
-                  return;
-                }
-                const border = borders.find((b) => b.id === e.target.value);
-                if (border) onSelect(border);
-              }}
-              className="w-full bg-white border border-gray-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans cursor-pointer shadow-sm"
-            >
-              <option value="all">Бүх боомт</option>
-              {borders.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-4">
-             <MapPin className="w-6 h-6 text-gray-300" />
-             <div className="h-px w-8 bg-gray-100" />
-             {GOODS.slice(0, 4).map(g => (
-               <span key={g.id} className="text-xl opacity-50 grayscale hover:grayscale-0 hover:opacity-100 cursor-pointer transition-all">
-                {g.icon}
-               </span>
-             ))}
-          </div>
-        )}
-      </div>
 
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <AnimatePresence mode="wait">
@@ -537,19 +614,34 @@ export function Sidebar({
                     </section>
 
                     {/* Laboratory */}
-                    {selectedBorder.hasLaboratory && (
+                    {(selectedBorder.hasLaboratory || selectedBorder.customsLabInfo) && (
                       <section className="space-y-3">
                         <div className="flex items-center gap-2 pb-1 text-gray-900 font-black">
                           <span className="text-sm">🔬</span>
                           <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-teal-600">Гаалийн салбар лаборатори</h3>
                         </div>
-                        <div className="grid grid-cols-1 gap-2">
+                        <div className="space-y-3">
+                          {selectedBorder.customsLabInfo && (
+                            <div className="p-3 bg-teal-50/50 border border-teal-100 rounded-xl shadow-sm">
+                              <p className="text-[11px] font-bold text-teal-800 leading-relaxed">{selectedBorder.customsLabInfo}</p>
+                            </div>
+                          )}
+                          
                           {(selectedBorder.labCapabilities || []).map((cap, i) => (
                             <div key={i} className="flex items-center gap-3 p-2.5 bg-white border border-gray-100 rounded-xl shadow-sm">
                               <span className="text-sm">🔬</span>
                               <span className="text-[11px] font-bold text-gray-700 leading-tight">{cap}</span>
                             </div>
                           ))}
+
+                          {selectedBorder.testedGoodsInfo && (
+                            <div className="space-y-1.5 mt-2">
+                              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">Шинжилгээ хийдэг бараа:</span>
+                              <div className="p-3 bg-gray-50 border border-gray-100 rounded-xl">
+                                <p className="text-[10px] font-bold text-gray-600 leading-relaxed">{selectedBorder.testedGoodsInfo}</p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </section>
                     )}

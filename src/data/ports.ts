@@ -428,7 +428,7 @@ export const PORTS: BorderCrossing[] = [
     neighborPortName: "Цэхэ (БНХАУ)", 
     operationalStatus: "Олон улсын", 
     trafficStatus: "Хэвийн", 
-    transportTypes: ["Автозам"], 
+    transportTypes: ["Автозам", "AGV"], 
     capacity: 800,
     legalImports: [
       { goodId: 'explosive', text: 'Тэсэрч дэлбэрэх бодис', resolutions: ['ЗГ №215/2022'] },
@@ -503,5 +503,41 @@ export const PORTS: BorderCrossing[] = [
     legalExports: [
       { goodId: 'explosive', text: 'Тэсэрч дэлбэрэх бодис', resolutions: ['ЗГ №215/2022'] },
     ]
+  },
+  { 
+    id: 'murun-airport', 
+    name: 'Мөрөн нисэх буудал', 
+    region: 'Хөвсгөл', 
+    direction: 'Агаар', 
+    lat: 49.6583, 
+    lng: 100.1000, 
+    ubDistance: 671, 
+    aimagDistance: 5, 
+    neighborPortName: "Олон улсын нисэх буудлууд", 
+    operationalStatus: "Олон улсын", 
+    trafficStatus: "Хэвийн", 
+    transportTypes: ["Агаар"], 
+    category: "Боомт",
+    capacity: 300,
+    legalImports: [],
+    legalExports: []
+  },
+  { 
+    id: 'choibalsan-airport', 
+    name: 'Чойбалсан олон улсын нисэх буудал', 
+    region: 'Дорнод', 
+    direction: 'Агаар', 
+    lat: 48.1353, 
+    lng: 114.6464, 
+    ubDistance: 655, 
+    aimagDistance: 14, 
+    neighborPortName: "Олон улсын нисэх буудлууд", 
+    operationalStatus: "Олон улсын", 
+    trafficStatus: "Хэвийн", 
+    transportTypes: ["Агаар"], 
+    category: "Боомт",
+    capacity: 500,
+    legalImports: [],
+    legalExports: []
   },
 ];

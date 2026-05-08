@@ -94,6 +94,8 @@ interface PortEditData {
   areaSize: number;
   staffGUAB: number;
   staffGUB: number;
+  customsLabInfo: string;
+  testedGoodsInfo: string;
   description: string;
   imageUrl: string;
 }
@@ -160,6 +162,8 @@ export const AdminImageModal: React.FC<AdminImageModalProps> = ({ isOpen, onClos
           areaSize: port.areaSize,
           staffGUAB: port.staffGUAB,
           staffGUB: port.staffGUB,
+          customsLabInfo: port.customsLabInfo || '',
+          testedGoodsInfo: port.testedGoodsInfo || '',
           description: port.description,
           imageUrl: port.imageUrl
         });
@@ -791,6 +795,26 @@ export const AdminImageModal: React.FC<AdminImageModalProps> = ({ isOpen, onClos
                               }}
                               className="w-full bg-gray-100 border-none rounded-2xl px-4 py-3 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                             />
+                          </div>
+                          <div className="col-span-2">
+                             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Гаалийн салбар лабораторын мэдээлэл</label>
+                             <input 
+                               type="text"
+                               value={editData.customsLabInfo || ''}
+                               onChange={(e) => setEditData({...editData, customsLabInfo: e.target.value})}
+                               className="w-full bg-gray-100 border-none rounded-2xl px-4 py-3 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                               placeholder="Салбар лабораторын мэдээлэл..."
+                             />
+                          </div>
+                          <div className="col-span-2">
+                             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Шинжилгээ хийдэг барааны мэдээлэл</label>
+                             <textarea 
+                               value={editData.testedGoodsInfo || ''}
+                               onChange={(e) => setEditData({...editData, testedGoodsInfo: e.target.value})}
+                               rows={2}
+                               className="w-full bg-gray-100 border-none rounded-2xl px-4 py-3 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all resize-none"
+                               placeholder="Шинжилгээ хийдэг бараанууд..."
+                             />
                           </div>
                           <div>
                             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 block">УБ хүртэл (км)</label>

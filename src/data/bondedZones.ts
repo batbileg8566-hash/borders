@@ -7,7 +7,7 @@ export const BONDED_ZONES: BorderCrossing[] = [
     region: 'Улаанбаатар',
     direction: 'Дотоод',
     category: 'Баталгаат бүс',
-    subCategory: 'Баталгаат агуулах',
+    subCategory: 'Гаалийн баталгаат агуулах',
     lat: 47.95,
     lng: 106.80,
     ubDistance: 10,

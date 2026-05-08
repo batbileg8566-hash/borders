@@ -59,7 +59,7 @@ export default function App() {
   }, []);
 
   const [selectedCategory, setSelectedCategory] = useState<PortCategory>("Боомт");
-  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>("Авто зам");
   const [hoveredCategory, setHoveredCategory] = useState<PortCategory | null>(null);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -69,7 +69,7 @@ export default function App() {
   }>({ ports: {}, goods: {} });
 
   const MENU_STRUCTURE: Record<PortCategory, string[]> = {
-    "Боомт": ["Автозам", "Төмөр зам", "Агаар", "AGV"],
+    "Боомт": ["Авто зам", "Төмөр зам", "Олон Улсын нисэх буудал", "AGV"],
     "Гүний гааль": [
       "Улаанбаатар хот дахь гаалийн газар",
       "Орхон аймаг дахь гаалийн газар",
@@ -89,12 +89,12 @@ export default function App() {
       "Шуудан илгээмжийн"
     ],
     "Баталгаат бүс": [
-      "Баталгаат агуулах",
-      "Баталгаат үйлдвэрийн газар",
-      "Баталгаат үзэсгэлэнгийн газар",
-      "Баталгаат барилгын талбай",
-      "Татваргүй барааны дэлгүүр",
-      "Гаалийн тусгай бүс"
+      "Гаалийн баталгаат агуулах",
+      "Гаалийн баталгаат барилгын талбай",
+      "Гаалийн баталгаат үзэсгэлэнгийн газар",
+      "Гаалийн баталгаат үйлдвэрийн газар",
+      "Гаалийн тусгай бүс",
+      "Татваргүй барааны дэлгүүр"
     ],
     "Чөлөөт бүс": [
       "Алтанбулаг",
@@ -245,7 +245,16 @@ export default function App() {
     if (selectedSubCategory) {
       if (selectedCategory === "Боомт") {
         // Special case for Boomt: filter by transport types
-        base = base.filter(b => b.transportTypes.includes(selectedSubCategory as any));
+        // Support mapping from UI labels to data labels
+        const mapping: Record<string, string> = {
+          "Авто зам": "Автозам",
+          "Олон Улсын нисэх буудал": "Агаар"
+        };
+        const searchVal = mapping[selectedSubCategory] || selectedSubCategory;
+        
+        base = base.filter(b => b.transportTypes.some(t => 
+          t === searchVal || t.replace(/\s/g, '') === searchVal.replace(/\s/g, '')
+        ));
       } else {
         base = base.filter(b => b.subCategory === selectedSubCategory);
       }
@@ -284,7 +293,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-full bg-[#f3f4f6] overflow-hidden transition-all duration-300">
       {/* Header */}
-      <header className="h-16 shrink-0 bg-white border-b border-[#e5e7eb] flex items-center px-4 md:px-6 justify-between z-30 shadow-sm">
+      <header className="h-16 shrink-0 bg-white border-b border-[#e5e7eb] flex items-center px-4 md:px-6 justify-between z-[110] shadow-sm relative">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
             <svg width="20" height="20" className="md:w-6 md:h-6" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -296,8 +305,16 @@ export default function App() {
             <h1 className="text-sm md:text-xl font-bold tracking-tight text-[#111827] uppercase line-clamp-1">
               Боомтын Хяналтын Систем
             </h1>
-            {selectedSubCategory && (
-               <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{selectedSubCategory}</span>
+            {(selectedCategory || selectedSubCategory) && (
+               <div className="flex items-center gap-1.5 leading-none">
+                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{selectedCategory}</span>
+                 {selectedSubCategory && (
+                   <>
+                     <span className="text-[10px] text-gray-300">/</span>
+                     <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{selectedSubCategory}</span>
+                   </>
+                 )}
+               </div>
             )}
           </div>
         </div>
@@ -308,7 +325,7 @@ export default function App() {
             <MapPin className="w-5 h-5" />
           </button>
           <div className="flex gap-2 md:gap-8 items-center" ref={menuRef}>
-          <div className="hidden md:flex p-1 bg-gray-100 rounded-xl gap-0.5 md:gap-1 relative z-50">
+          <div className="hidden md:flex p-1 bg-gray-100 rounded-xl gap-0.5 md:gap-1 relative">
             {categories.map(cat => (
               <div 
                 key={cat} 
@@ -316,15 +333,12 @@ export default function App() {
               >
                 <button
                   onClick={() => {
-                    if (hoveredCategory === cat) {
-                      setHoveredCategory(null);
-                    } else {
-                      setHoveredCategory(cat);
-                      setSelectedCategory(cat);
-                      setSelectedSubCategory(null);
-                      setSelectedBorder(null);
-                      setIsSidebarOpen(false);
-                    }
+                    setSelectedCategory(cat);
+                    const defaultToAll = cat === "Чөлөөт бүс" || cat === "Гүний гааль";
+                    setSelectedSubCategory(defaultToAll ? null : MENU_STRUCTURE[cat][0]);
+                    setSelectedBorder(null);
+                    setIsSidebarOpen(false);
+                    setHoveredCategory(null);
                   }}
                   className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-tight transition-all flex items-center gap-1 ${
                     selectedCategory === cat 
@@ -333,53 +347,9 @@ export default function App() {
                   }`}
                 >
                   {cat}
-                  <ChevronDown className={`w-3 h-3 transition-transform ${hoveredCategory === cat ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${(hoveredCategory ? hoveredCategory === cat : selectedCategory === cat) ? '' : 'rotate-180'}`} />
                 </button>
 
-                <AnimatePresence>
-                  {hoveredCategory === cat && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute top-full left-0 mt-1 min-w-[200px] bg-white border border-gray-100 rounded-xl shadow-2xl p-2 z-[60] overflow-hidden"
-                    >
-                      <div className="flex flex-col gap-1">
-                        {MENU_STRUCTURE[cat].map(sub => (
-                          <button
-                            key={sub}
-                            onClick={() => {
-                              setSelectedCategory(cat);
-                              setSelectedSubCategory(sub);
-                              setSelectedBorder(null);
-                              setIsSidebarOpen(false);
-                              setHoveredCategory(null);
-                            }}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-tight transition-all ${
-                              selectedSubCategory === sub 
-                                ? "bg-blue-50 text-blue-600" 
-                                : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-                            }`}
-                          >
-                            {sub}
-                          </button>
-                        ))}
-                        {/* Clear Filter Option */}
-                        <div className="h-px bg-gray-100 my-1" />
-                        <button
-                          onClick={() => {
-                            setSelectedCategory(cat);
-                            setSelectedSubCategory(null);
-                            setHoveredCategory(null);
-                          }}
-                          className="w-full text-left px-3 py-2 rounded-lg text-[9px] font-black text-gray-400 uppercase tracking-widest hover:text-red-500 transition-all font-mono"
-                        >
-                          Бүгдийг харах
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
             ))}
           </div>
@@ -415,6 +385,55 @@ export default function App() {
           </div>
         </div>
       </header>
+      
+      {/* Sub-Category Navigation Bar */}
+      <AnimatePresence>
+        {selectedCategory && MENU_STRUCTURE[selectedCategory as keyof typeof MENU_STRUCTURE] && (
+          <motion.div
+            initial={{ height: 0, opacity: 0, y: -10 }}
+            animate={{ height: 'auto', opacity: 1, y: 0 }}
+            exit={{ height: 0, opacity: 0, y: -10 }}
+            className="bg-white/95 backdrop-blur-md border-b border-gray-100 z-[100] shadow-sm relative overflow-hidden"
+          >
+            <div className="flex items-center gap-2 px-6 md:px-10 py-2 overflow-x-auto no-scrollbar scroll-smooth">
+              <div className="flex items-center gap-2 min-w-max pr-6">
+                <button
+                  onClick={() => setSelectedSubCategory(null)}
+                  className={`whitespace-nowrap px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest transition-all duration-300 ${
+                    selectedSubCategory === null
+                      ? "bg-gray-900 text-white shadow-md shadow-gray-200 -translate-y-px"
+                      : "bg-gray-100/50 text-gray-500 hover:bg-gray-200/70 hover:text-gray-700"
+                  }`}
+                >
+                  Бүх
+                </button>
+                
+                <div className="w-px h-3 bg-gray-200 mx-1" />
+                
+                {MENU_STRUCTURE[selectedCategory as keyof typeof MENU_STRUCTURE].map(sub => (
+                  <button
+                    key={sub}
+                    onClick={() => {
+                      setSelectedSubCategory(sub);
+                      setSelectedBorder(null);
+                    }}
+                    className={`whitespace-nowrap px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest transition-all duration-300 ${
+                      selectedSubCategory === sub
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-100 -translate-y-px"
+                        : "bg-gray-50/50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    }`}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Animated underline indicator fade effect */}
+            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-100 to-transparent opacity-50" />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex flex-1 overflow-hidden relative">
         {/* Sidebar / InfoPanel */}
