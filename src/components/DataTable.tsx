@@ -1,20 +1,24 @@
-import React, { useState, useMemo } from "react";
-import { GOODS, borderCrossings } from "../data";
+import React, { useState, useMemo, useRef } from "react";
+import { GOODS } from "../data";
 import { BorderCrossing } from "../types";
 import { Search, ChevronUp, ChevronDown, Download, Filter, Table as TableIcon, Printer } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { utils, writeFile } from 'xlsx';
+import { useSetSelectedBorder } from "../store/useSidebarStore";
+import { PORT_STATUS_DOT_MAP, TRAFFIC_BADGE_MAP, TRANSPORT_EMOJI_MAP } from "../constants/portMaps";
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 interface DataTableProps {
   borders: BorderCrossing[];
   isOpen: boolean;
   onToggle: () => void;
-  onSelect: (border: BorderCrossing) => void;
 }
 
-export function DataTable({ borders, isOpen, onToggle, onSelect }: DataTableProps) {
+export function DataTable({ borders, isOpen, onToggle }: DataTableProps) {
+  const setSelectedBorder = useSetSelectedBorder();
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: keyof BorderCrossing; direction: 'asc' | 'desc' } | null>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
 
   const filteredAndSortedBorders = useMemo(() => {
     let result = [...borders];
@@ -39,7 +43,14 @@ export function DataTable({ borders, isOpen, onToggle, onSelect }: DataTableProp
     return result;
   }, [borders, searchTerm, sortConfig]);
 
-  const handleSort = (key: string) => {
+  const rowVirtualizer = useVirtualizer({
+    count: filteredAndSortedBorders.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 64, // Slightly larger to accommodate two lines
+    overscan: 5,
+  });
+
+  const handleSort = (key: keyof BorderCrossing) => {
     setSortConfig(current => ({
       key,
       direction: current?.key === key && current.direction === 'asc' ? 'desc' : 'asc'
@@ -48,15 +59,18 @@ export function DataTable({ borders, isOpen, onToggle, onSelect }: DataTableProp
 
   const exportToExcel = () => {
     const dataToExport = filteredAndSortedBorders.map(b => ({
-      'Нэр': b.name,
+      'Боомтын нэр': b.name,
       'Аймаг': b.region,
-      'Чиглэл': b.direction,
-      'Ангилал': b.category || 'Боомт',
-      'Дэд ангилал': b.subCategory || '-',
+      'Түвшин': b.operationalStatus,
+      'Ачаалал': b.trafficStatus,
+      'Тээврийн төрөл': b.transportTypes.join(', '),
       'УБ-аас (км)': b.ubDistance,
-      'Статус': b.operationalStatus,
-      'Тээвэр': b.transportTypes.join(', '),
-      'Хүчин чадал': b.capacity
+      'Аймгийн төвөөс (км)': b.aimagDistance,
+      'Хиллэдэг боомт': b.neighborPortName || '—',
+      'Импорт бараа': b.legalImports?.map(li => li.text).join('; ') || '—',
+      'Экспорт бараа': b.legalExports?.map(le => le.text).join('; ') || '—',
+      'Саналтай бараа': b.proposedAdditions?.map(pa => pa.text).join('; ') || '—',
+      'Тайлбар': b.description || '—',
     }));
     
     const ws = utils.json_to_sheet(dataToExport);
@@ -127,7 +141,7 @@ export function DataTable({ borders, isOpen, onToggle, onSelect }: DataTableProp
         </div>
 
         {/* Table container */}
-        <div className="flex-1 overflow-auto custom-scrollbar">
+        <div className="flex-1 overflow-auto custom-scrollbar" ref={tableContainerRef}>
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead className="sticky top-0 bg-gray-50 z-10 border-b border-gray-200">
               <tr>
@@ -156,81 +170,86 @@ export function DataTable({ borders, isOpen, onToggle, onSelect }: DataTableProp
                 <th className="hidden md:table-cell px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">БАРААНЫ ХҮРТЭЭМЖ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredAndSortedBorders.map(border => (
-                <tr 
-                  key={border.id} 
-                  onClick={() => { onSelect(border); onToggle(); }}
-                  className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold text-gray-900 leading-tight">{border.name}</span>
-                      {border.neighborPortName && (
-                        <span className="text-[10px] font-medium text-blue-500 opacity-70">↔ {border.neighborPortName}</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-xs font-semibold text-gray-500">{border.region}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${
-                        border.operationalStatus === 'Олон улсын' ? 'bg-blue-600' : 
-                        border.operationalStatus === 'Хоёр талын' ? 'bg-amber-500' : 'bg-slate-500'
-                      }`} />
-                      <span className="text-xs font-bold text-gray-700">{border.operationalStatus}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      border.trafficStatus === 'Хэвийн' ? 'bg-emerald-50 text-emerald-600' :
-                      border.trafficStatus === 'Ачаалалтай' ? 'bg-amber-50 text-amber-600' :
-                      'bg-rose-50 text-rose-600'
-                    }`}>
-                      {border.trafficStatus}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex gap-1.5">
-                       {border.transportTypes.map(t => (
-                         <span key={t} title={t} className="text-sm">
-                           {t === 'Автозам' ? '🚗' : t === 'Төмөр зам' ? '🚂' : '📡'}
-                         </span>
-                       ))}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-xs font-bold text-blue-600 hidden md:table-cell">{border.ubDistance}</td>
-                  <td className="px-6 py-4 font-mono text-xs font-bold text-gray-600 hidden md:table-cell">{border.aimagDistance}</td>
-                  <td className="px-6 py-4 hidden md:table-cell">
-                    <div className="flex gap-1">
-                      {GOODS.slice(0, 8).map(g => {
-                        const isLegal = border.legalImports?.some(li => li.goodId === g.id);
-                        const isProposed = border.proposedAdditions?.some(pa => pa.goodId === g.id);
-                        const status = isLegal ? 'ok' : isProposed ? 'warn' : null;
-                        const urgent = isProposed && hasUrgency(border);
-                        
-                        return (
-                          <div 
-                            key={g.id}
-                            title={`${g.name}: ${status === 'ok' ? 'Зөвшөөрөгдсөн' : status === 'warn' ? 'Саналтай' : 'Мэдээлэлгүй'}`}
-                            className={`w-6 h-6 rounded flex items-center justify-center text-[10px] border relative ${
-                              status === 'ok' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' :
-                              status === 'warn' ? 'bg-orange-50 border-orange-100 text-orange-600' :
-                              'bg-gray-50 border-gray-100 text-gray-300'
-                            } ${urgent ? 'ring-2 ring-red-500 ring-offset-1 animate-pulse' : ''}`}
-                          >
-                            {g.icon}
-                            {urgent && (
-                              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-                            )}
-                          </div>
-                        );
-                      })}
-                      {GOODS.length > 8 && <span className="text-[10px] text-gray-300 self-center">+{GOODS.length - 8}</span>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+            <tbody 
+              style={{ 
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                position: 'relative'
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const border = filteredAndSortedBorders[virtualRow.index];
+                return (
+                  <tr 
+                    key={border.id} 
+                    onClick={() => { setSelectedBorder(border); onToggle(); }}
+                    className="hover:bg-blue-50/30 transition-colors group cursor-pointer absolute top-0 left-0 w-full border-b border-gray-100"
+                    style={{
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`
+                    }}
+                  >
+                    <td className="px-6 py-2">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-gray-900 leading-tight">{border.name}</span>
+                        {border.neighborPortName && (
+                          <span className="text-[10px] font-medium text-blue-500 opacity-70">↔ {border.neighborPortName}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-2 text-xs font-semibold text-gray-500">{border.region}</td>
+                    <td className="px-6 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${PORT_STATUS_DOT_MAP[border.operationalStatus] ?? 'bg-slate-500'}`} />
+                        <span className="text-xs font-bold text-gray-700">{border.operationalStatus}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${TRAFFIC_BADGE_MAP[border.trafficStatus] ?? 'bg-gray-50 text-gray-600'}`}>
+                        {border.trafficStatus}
+                      </span>
+                    </td>
+                    <td className="px-6 py-2">
+                      <div className="flex gap-1.5">
+                         {border.transportTypes.map(t => (
+                           <span key={t} title={t} className="text-sm">
+                             {TRANSPORT_EMOJI_MAP[t] ?? '•'}
+                           </span>
+                         ))}
+                      </div>
+                    </td>
+                    <td className="px-6 py-2 font-mono text-xs font-bold text-blue-600 hidden md:table-cell">{border.ubDistance}</td>
+                    <td className="px-6 py-2 font-mono text-xs font-bold text-gray-600 hidden md:table-cell">{border.aimagDistance}</td>
+                    <td className="px-6 py-2 hidden md:table-cell">
+                      <div className="flex gap-1">
+                        {GOODS.slice(0, 8).map(g => {
+                          const isLegal = border.legalImports?.some(li => li.goodId === g.id);
+                          const isProposed = border.proposedAdditions?.some(pa => pa.goodId === g.id);
+                          const status = isLegal ? 'ok' : isProposed ? 'warn' : null;
+                          const urgent = isProposed && hasUrgency(border);
+                          
+                          return (
+                            <div 
+                              key={g.id}
+                              title={`${g.name}: ${status === 'ok' ? 'Зөвшөөрөгдсөн' : status === 'warn' ? 'Саналтай' : 'Мэдээлэлгүй'}`}
+                              className={`w-6 h-6 rounded flex items-center justify-center text-[10px] border relative ${
+                                status === 'ok' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' :
+                                status === 'warn' ? 'bg-orange-50 border-orange-100 text-orange-600' :
+                                'bg-gray-50 border-gray-100 text-gray-300'
+                              } ${urgent ? 'ring-2 ring-red-500' : ''}`}
+                            >
+                              {g.icon}
+                              {urgent && (
+                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+                              )}
+                            </div>
+                          );
+                        })}
+                        {GOODS.length > 8 && <span className="text-[10px] text-gray-300 self-center">+{GOODS.length - 8}</span>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

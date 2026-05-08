@@ -18,17 +18,15 @@ import { SourcesModal } from "./SourcesModal";
 import { ShareModal } from "./components/ShareModal";
 import { AdminImageModal } from "./components/AdminImageModal";
 
-export default function App() {
-  const [selectedBorder, setSelectedBorder] = useState<BorderCrossing | null>(null);
-  const [globalFilter, setGlobalFilter] = useState<{
-    goodId: string | null;
-    direction: Direction;
-  }>({
-    goodId: null,
-    direction: "import"
-  });
+import { useSidebarStore, useSelectedBorder, useGlobalFilter, useDistanceMode, useSetSelectedBorder, useSetGlobalFilter, useSetDistanceMode } from "./store/useSidebarStore";
 
-  const [distanceMode, setDistanceMode] = useState<'ub' | 'aimag' | null>(null);
+export default function App() {
+  const selectedBorder = useSelectedBorder();
+  const globalFilter = useGlobalFilter();
+  const distanceMode = useDistanceMode();
+  const setSelectedBorder = useSetSelectedBorder();
+  const setGlobalFilter = useSetGlobalFilter();
+  const setDistanceMode = useSetDistanceMode();
 
   const [detailModal, setDetailModal] = useState<{
     isOpen: boolean;
@@ -144,17 +142,21 @@ export default function App() {
           });
         }
 
-        // Merge Generic Overrides (newer data prevails)
+        // Merge Generic Overrides
         if (genericData) {
           genericData.forEach(item => {
             if (item.category === 'port') {
               const data = item.data || {};
+              // Ensure we have a valid fallback if first time setting lat/lng
+              const existingLat = newPorts[item.entity_id]?.lat;
+              const existingLng = newPorts[item.entity_id]?.lng;
+              
               newPorts[item.entity_id] = { 
                 ...newPorts[item.entity_id], 
                 ...data,
                 updated_at: item.updated_at,
-                lat: safeNumber(data.lat, newPorts[item.entity_id]?.lat),
-                lng: safeNumber(data.lng, newPorts[item.entity_id]?.lng),
+                lat: safeNumber(data.lat, existingLat),
+                lng: safeNumber(data.lng, existingLng),
                 ubDistance: safeNumber(data.ubDistance, newPorts[item.entity_id]?.ubDistance),
                 aimagDistance: safeNumber(data.aimagDistance, newPorts[item.entity_id]?.aimagDistance)
               };
@@ -440,14 +442,8 @@ export default function App() {
         <div className={`${isSidebarOpen ? 'translate-y-0' : 'translate-y-full md:translate-y-0'} fixed md:relative bottom-0 left-0 right-0 z-50 md:z-10 transition-transform duration-500`}>
           <Sidebar 
             borders={filteredCrossings} 
-            selectedBorder={currentSelectedBorder} 
-            onSelect={handleSelect} 
             onShowGoodDetail={handleShowGoodDetail}
-            globalFilter={globalFilter}
-            onFilterChange={setGlobalFilter}
             onClose={() => setIsSidebarOpen(false)}
-            distanceMode={distanceMode}
-            onDistanceModeChange={setDistanceMode}
             refreshTrigger={refreshTrigger}
           />
         </div>
@@ -456,11 +452,6 @@ export default function App() {
         <main className="flex-1 relative overflow-hidden bg-[#e2e8f0]">
           <BorderMap 
             borders={filteredCrossings} 
-            selectedBorder={currentSelectedBorder} 
-            onSelect={handleSelect} 
-            globalFilter={globalFilter}
-            distanceMode={distanceMode}
-            onDistanceModeChange={setDistanceMode}
             refreshTrigger={refreshTrigger}
           />
           
@@ -481,7 +472,6 @@ export default function App() {
             borders={filteredCrossings}
             isOpen={isTableOpen}
             onToggle={() => setIsTableOpen(!isTableOpen)}
-            onSelect={handleSelect}
           />
         </main>
 

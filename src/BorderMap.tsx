@@ -4,25 +4,26 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { BorderCrossing, Direction, GoodStatus, PortTransportType, Good } from "./types";
 import { GOODS } from "./data";
-import { portStatusColorMap } from "./Sidebar";
+import { useGlobalFilter, useDistanceMode, useSelectedBorder, useSetSelectedBorder } from "./store/useSidebarStore";
 
 const UB_LAT = 47.9200;
 const UB_LNG = 106.9200;
 
 const isValidLatLng = (lat: any, lng: any) => {
-  if (typeof lat !== 'number' || typeof lng !== 'number' || !isFinite(lat) || !isFinite(lng)) {
+  if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || !isFinite(lat) || isNaN(lng) || !isFinite(lng)) {
     return false;
   }
-  // Be permissive: as long as one is a valid lat and both together make a valid pair (even if swapped)
+  // Mongolia Latitude is ~41-52, Longitude is ~87-120
+  // Standard Lat: -90 to 90, Lng: -180 to 180
   const isOption1 = lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
   const isOption2 = lng >= -90 && lng <= 90 && lat >= -180 && lat <= 180;
   return isOption1 || isOption2;
 };
 
 const getLatLng = (lat: number, lng: number): [number, number] => {
-  if (!isValidLatLng(lat, lng)) return [47.9200, 106.9200]; // Default to UB if invalid
-  // Mongolia Latitude is ~41-52, Longitude is ~87-120
-  // If the first value is > 70, it's definitely the Longitude
+  if (!isValidLatLng(lat, lng)) return [46.8625, 103.8467]; // Default to Mongolia center if invalid
+  
+  // If the values are swapped (e.g. lat is > 70 which is impossible for Mongolia lat)
   if (lat > 70) return [lng, lat];
   return [lat, lng];
 };
@@ -324,8 +325,13 @@ function BorderMarker({ border, isSelected, isProposed, selectedGood, goodStatus
   );
 }
 
-export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, distanceMode, refreshTrigger }: BorderMapProps) {
+export function BorderMap({ borders, refreshTrigger }: BorderMapProps) {
   const mongoliaCenter: [number, number] = [46.8625, 103.8467];
+  const globalFilter = useGlobalFilter();
+  const selectedBorder = useSelectedBorder();
+  const distanceMode = useDistanceMode();
+  const setSelectedBorder = useSetSelectedBorder();
+  
   const selectedGood = GOODS.find(g => g.id === globalFilter.goodId);
 
   const filteredBorders = borders.filter(b => {
@@ -379,7 +385,7 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
               selectedGood={selectedGood}
               goodStatus={globalFilter.goodId ? 'ok' : undefined}
               distanceMode={distanceMode}
-              onSelect={onSelect}
+              onSelect={setSelectedBorder}
             />
           );
         })}
@@ -405,13 +411,5 @@ export function BorderMap({ borders, selectedBorder, onSelect, globalFilter, dis
 
 export interface BorderMapProps {
   borders: BorderCrossing[];
-  selectedBorder: BorderCrossing | null;
-  onSelect: (border: BorderCrossing | null) => void;
-  globalFilter: {
-    goodId: string | null;
-    direction: Direction;
-  };
-  distanceMode: 'ub' | 'aimag' | null;
-  onDistanceModeChange: (mode: 'ub' | 'aimag' | null) => void;
   refreshTrigger?: number;
 }

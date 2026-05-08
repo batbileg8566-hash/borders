@@ -21,7 +21,7 @@ const DefaultIcon = L.icon({
 L.Marker.prototype.options.icon = DefaultIcon;
 
 const isValidLatLng = (lat: any, lng: any) => {
-  if (typeof lat !== 'number' || typeof lng !== 'number' || !isFinite(lat) || !isFinite(lng)) {
+  if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || !isFinite(lat) || isNaN(lng) || !isFinite(lng)) {
     return false;
   }
   return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;

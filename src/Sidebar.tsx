@@ -1,93 +1,73 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { BorderCrossing, Good, GoodStatus, Direction } from "./types";
 import { GOODS } from "./data";
 import { Package, MapPin, CheckCircle2, AlertTriangle, Building2, Filter, ArrowRight, CornerDownRight, X, ChevronLeft, ChevronRight, FileDown, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import * as XLSX from 'xlsx';
+import { GoodsFilter } from "./components/GoodsFilter";
+import { PortSelector } from "./components/PortSelector";
+import { useIsMobile } from "./hooks/useIsMobile";
+import { usePortImages } from "./hooks/usePortImages";
+import { PortImage } from "./components/PortImage";
+import { useSidebarStore, useSelectedBorder, useGlobalFilter, useActiveTab, useExpandedSection, useSetSelectedBorder, useSetGlobalFilter, useToggleSection, useSetActiveTab, useSetIsCollapsed } from "./store/useSidebarStore";
+import { STATUS_LABEL_MAP, STATUS_COLOR_MAP, PORT_STATUS_COLOR_MAP, TRAFFIC_COLOR_MAP, TRANSPORT_ICON_MAP } from "./constants/portMaps";
 
 interface SidebarProps {
-  selectedBorder: BorderCrossing | null;
-  onSelect: (border: BorderCrossing | null) => void;
   onShowGoodDetail: (good: Good, status: { import?: GoodStatus; export?: GoodStatus }) => void;
   borders: BorderCrossing[];
-  globalFilter: {
-    goodId: string | null;
-    direction: Direction;
-  };
-  onFilterChange: (filter: { goodId: string | null; direction: Direction }) => void;
   onClose?: () => void;
-  distanceMode: 'ub' | 'aimag' | null;
-  onDistanceModeChange: (mode: 'ub' | 'aimag' | null) => void;
   refreshTrigger?: number;
 }
-
-const statusLabelMap: Record<GoodStatus, string> = {
-  ok: "Тогтоолд орсон",
-  warn: "Нэмэх саналтай",
-  crit: "Хуулийн санал",
-};
-
-const statusColorMap: Record<GoodStatus, string> = {
-  ok: "text-emerald-600 bg-emerald-50 border-emerald-100",
-  warn: "text-orange-600 bg-orange-50 border-orange-100",
-  crit: "text-rose-600 bg-rose-50 border-rose-100",
-};
 
 const getResNumber = (source: string) => {
   const match = source.match(/ЗГ-ын\s*\d{4}[.\d]*(\s*№\d+)?/);
   return match ? match[0] : source.split(' ')[0];
 };
 
-export const portStatusColorMap: Record<string, string> = {
-  "Олон улсын": "bg-blue-600 shadow-blue-500/50",
-  "Хоёр талын": "bg-amber-500 shadow-amber-500/50",
-  "Түр ажиллагаатай": "bg-slate-500 shadow-slate-500/50",
-};
-
-const trafficColorMap: Record<string, string> = {
-  "Хэвийн": "text-emerald-500 bg-emerald-50 border-emerald-100",
-  "Ачаалалтай": "text-amber-500 bg-amber-50 border-amber-100",
-  "Квот тулсан": "text-rose-500 bg-rose-50 border-rose-100",
-};
-
-const transportIconMap: Record<string, string> = {
-  "Автозам": "🚗 Автозам",
-  "Төмөр зам": "🚂 Төмөр зам",
-  "AGV": "📡 AGV Ухаалаг тээвэр",
-  "Агаар": "✈️ Агаар",
-};
-
 export function Sidebar({ 
-  selectedBorder, 
-  onSelect, 
   onShowGoodDetail, 
   borders, 
-  globalFilter, 
-  onFilterChange,
   onClose,
-  distanceMode,
-  onDistanceModeChange,
   refreshTrigger
 }: SidebarProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'goods' | 'dev'>('info');
-  const [expandedSection, setExpandedSection] = useState<'goods' | 'ports' | null>('goods');
+  const isMobile = useIsMobile();
+  const customGoodImages = usePortImages(refreshTrigger);
+  
+  const selectedBorder = useSelectedBorder();
+  const globalFilter = useGlobalFilter();
+  const activeTab = useActiveTab();
+  const expandedSection = useExpandedSection();
+  const isCollapsed = useSidebarStore(s => s.isCollapsed);
+  
+  const setSelectedBorder = useSetSelectedBorder();
+  const setGlobalFilter = useSetGlobalFilter();
+  const toggleSection = useToggleSection();
+  const setActiveTab = useSetActiveTab();
+  const setIsCollapsed = useSetIsCollapsed();
 
   // Reset tab to 'info' when a new border is selected
   React.useEffect(() => {
-    setActiveTab('info');
-  }, [selectedBorder?.id]);
+    if (selectedBorder && activeTab !== 'info') {
+      setActiveTab('info');
+    }
+  }, [selectedBorder?.id, activeTab, setActiveTab]);
   
   const selectedGood = useMemo(() => GOODS.find(g => g.id === globalFilter.goodId), [globalFilter.goodId]);
   
-  const displayImage = useMemo(() => {
-    if (!selectedBorder) return null;
-    return selectedBorder.imageUrl || selectedBorder.development?.imageUrl;
-  }, [selectedBorder]); 
+  const displayImage = selectedBorder?.imageUrl ?? selectedBorder?.development?.imageUrl ?? null;
 
   const handleExportExcel = () => {
-    const data = borders.map(b => ({
+    // If a commodity filter is active, export only those relevant ports
+    let exportData = borders;
+    if (globalFilter.goodId && filteredPorts) {
+      exportData = [
+        ...filteredPorts.ok,
+        ...filteredPorts.warn,
+        ...filteredPorts.crit
+      ];
+    }
+
+    const data = exportData.map(b => ({
       'Боомтын нэр': b.name,
       'Төрөл': b.operationalStatus,
       'Статус': b.trafficStatus,
@@ -163,14 +143,14 @@ export function Sidebar({
     <motion.div 
       initial={false}
       animate={{ 
-        width: typeof window !== 'undefined' && window.innerWidth < 768 ? '100vw' : (isCollapsed ? 80 : 350),
-        height: typeof window !== 'undefined' && window.innerWidth < 768 ? '70vh' : '100%',
-        position: typeof window !== 'undefined' && window.innerWidth < 768 ? 'fixed' : 'relative',
+        width: isMobile ? '100vw' : (isCollapsed ? 80 : 350),
+        height: isMobile ? '70vh' : '100%',
+        position: isMobile ? 'fixed' : 'relative',
         bottom: 0,
         zIndex: 100
       }}
       className={`bg-white text-[#111827] flex flex-col border-r border-[#e5e7eb] overflow-hidden shadow-2xl md:shadow-sm relative group transition-all duration-300 ${
-        typeof window !== 'undefined' && window.innerWidth < 768 ? 'rounded-t-3xl border-t' : ''
+        isMobile ? 'rounded-t-3xl border-t' : ''
       }`}
     >
       {/* Collapse Toggle - Desktop Only */}
@@ -199,119 +179,48 @@ export function Sidebar({
             {/* Goods Filter Section */}
             <div className="flex flex-col bg-white">
               <button 
-                onClick={() => setExpandedSection(expandedSection === 'goods' ? null : 'goods')}
+                onClick={() => toggleSection('goods')}
                 className={`w-full h-14 px-5 flex items-center justify-between transition-all duration-300 group outline-none ${
                   expandedSection === 'goods' ? 'bg-gray-50' : 'hover:bg-gray-50/80'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg transition-all duration-300 ${
-                    expandedSection === 'goods' ? 'bg-blue-600 bg-opacity-10 text-blue-600 shadow-sm' : 'bg-gray-100 text-gray-400 group-hover:text-gray-500'
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 ${
+                    expandedSection === 'goods' ? 'bg-blue-600 text-white shadow-sm' : 'bg-blue-50 text-blue-600'
                   }`}>
                     <Filter className="w-4 h-4" />
                   </div>
-                  <div className="flex flex-col items-start leading-none">
-                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.15em] font-mono">
+                  <div className="flex flex-col items-start leading-tight">
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest font-mono">
                       Бараагаар шүүх
                     </span>
-                    {globalFilter.goodId && !expandedSection && (
-                      <span className="text-[9px] font-bold text-blue-600 mt-0.5">
-                        {selectedGood?.name} сонгогдсон
-                      </span>
-                    )}
+                    <span className="text-[11px] font-bold text-gray-800">
+                      {(globalFilter.goodId && expandedSection !== 'goods') ? `${selectedGood?.name} сонгогдсон` : "Бүх бараа"}
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                   {globalFilter.goodId && !expandedSection && (
-                    <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[8px] rounded-full font-black shadow-sm">1</span>
+                  {globalFilter.goodId && (
+                    <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center">1</div>
                   )}
-                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${expandedSection === 'goods' ? 'rotate-180 text-blue-600' : ''}`} />
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${expandedSection === 'goods' ? 'rotate-180' : ''}`} />
                 </div>
               </button>
 
               <motion.div 
                 initial={false}
                 animate={{ 
-                  height: expandedSection === 'goods' ? 'auto' : 0,
+                  height: expandedSection === 'goods' ? 440 : 0,
                   opacity: expandedSection === 'goods' ? 1 : 0
                 }}
-                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-                className="overflow-hidden bg-gray-50/30"
+                transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
               >
-                <div className="px-4 pb-5 pt-2">
-                  <div className="flex items-center justify-between px-1 mb-4">
-                    <button 
-                      onClick={handleExportExcel}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-emerald-700 border border-emerald-100 rounded-lg text-[9px] font-black uppercase hover:bg-emerald-50 hover:border-emerald-200 transition-all shadow-sm active:scale-95"
-                      title="Мэдээллийг Excel-ээр татах"
-                    >
-                      <FileDown className="w-3.5 h-3.5" />
-                      Excel татах
-                    </button>
-                    {globalFilter.goodId && (
-                      <button 
-                        onClick={() => onFilterChange({ goodId: null, direction: "import" })}
-                        className="px-2.5 py-1.5 text-[9px] font-black text-rose-500 hover:bg-rose-50 rounded-lg uppercase tracking-wider transition-all"
-                      >
-                        Шүүлтүүр цэвэрлэх
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-1 gap-1 select-none overflow-y-auto max-h-[320px] pr-1 custom-scrollbar">
-                    {(() => {
-                      const customGoodImages = JSON.parse(localStorage.getItem('customGoodImages') || '{}');
-                      return GOODS.map((g) => {
-                        const isActive = globalFilter.goodId === g.id;
-                        const importCount = borders.filter(b => b.legalImports?.some(li => li.goodId === g.id)).length;
-                        const exportCount = borders.filter(b => b.legalExports?.some(le => le.goodId === g.id)).length;
-
-                        return (
-                          <div 
-                            key={g.id} 
-                            className={`flex items-center justify-between p-2 rounded-xl border transition-all duration-300 ${
-                              isActive ? "bg-white border-blue-200 shadow-md translate-x-1" : "bg-transparent border-transparent hover:bg-white hover:border-gray-200"
-                            }`}
-                          >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <div className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-blue-50' : 'bg-gray-100/50'}`}>
-                                {customGoodImages[g.id] ? (
-                                  <img src={customGoodImages[g.id]} className="w-5 h-5 object-contain" />
-                                ) : (
-                                  <span className="text-lg leading-none">{g.icon}</span>
-                                )}
-                              </div>
-                              <span className={`text-[11px] font-bold leading-tight truncate ${isActive ? 'text-blue-700' : 'text-gray-600'}`}>
-                                {g.name}
-                              </span>
-                            </div>
-                            <div className="flex gap-1">
-                              {(['import', 'export'] as Direction[]).map(dir => {
-                                const isDirActive = isActive && globalFilter.direction === dir;
-                                const count = dir === 'import' ? importCount : exportCount;
-                                return (
-                                  <button
-                                    key={dir}
-                                    onClick={() => onFilterChange({ goodId: g.id, direction: dir })}
-                                    className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 shadow-sm active:scale-90 ${
-                                      isDirActive 
-                                        ? "bg-blue-600 text-white shadow-blue-200" 
-                                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                    }`}
-                                  >
-                                    {dir === 'import' ? 'Имп' : 'Экс'}
-                                    <span className={`text-[8px] font-black ${isDirActive ? 'text-blue-200' : 'text-gray-400'}`}>
-                                      {count}
-                                    </span>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
+                <div className="h-[440px]">
+                  <GoodsFilter 
+                    borders={borders}
+                    refreshTrigger={refreshTrigger || 0}
+                  />
                 </div>
               </motion.div>
             </div>
@@ -319,79 +228,47 @@ export function Sidebar({
             {/* Port Selector Section */}
             <div className="flex flex-col bg-white border-t border-gray-100">
               <button 
-                onClick={() => setExpandedSection(expandedSection === 'ports' ? null : 'ports')}
+                onClick={() => toggleSection('ports')}
                 className={`w-full h-14 px-5 flex items-center justify-between transition-all duration-300 group outline-none ${
                   expandedSection === 'ports' ? 'bg-gray-50' : 'hover:bg-gray-50/80'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg transition-all duration-300 ${
-                    expandedSection === 'ports' ? 'bg-blue-600 bg-opacity-10 text-blue-600 shadow-sm' : 'bg-gray-100 text-gray-400 group-hover:text-gray-500'
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 ${
+                    expandedSection === 'ports' ? 'bg-blue-600 text-white shadow-sm' : 'bg-blue-50 text-blue-600'
                   }`}>
                     <MapPin className="w-4 h-4" />
                   </div>
-                  <div className="flex flex-col items-start leading-none">
-                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.15em] font-mono">
+                  <div className="flex flex-col items-start leading-tight">
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest font-mono">
                       Боомтоор сонгох
                     </span>
-                    {selectedBorder && !expandedSection && (
-                      <span className="text-[9px] font-bold text-blue-600 mt-0.5">
-                        {selectedBorder.name} сонгогдсон
-                      </span>
-                    )}
+                    <span className="text-[11px] font-bold text-gray-800 truncate max-w-[140px]">
+                      {(selectedBorder && expandedSection !== 'ports') ? `${selectedBorder.name} сонгогдсон` : "Бүх боомт"}
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                   {selectedBorder && !expandedSection && (
-                    <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[8px] rounded-full font-black shadow-sm">1</span>
+                  {selectedBorder && (
+                    <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center">1</div>
                   )}
-                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${expandedSection === 'ports' ? 'rotate-180 text-blue-600' : ''}`} />
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${expandedSection === 'ports' ? 'rotate-180' : ''}`} />
                 </div>
               </button>
 
               <motion.div 
                 initial={false}
                 animate={{ 
-                  height: expandedSection === 'ports' ? 'auto' : 0,
+                  height: expandedSection === 'ports' ? 440 : 0,
                   opacity: expandedSection === 'ports' ? 1 : 0
                 }}
-                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-                className="overflow-hidden bg-gray-50/30"
+                transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
               >
-                <div className="px-4 pb-5 pt-2">
-                  <div className="grid grid-cols-1 gap-1 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                    <button
-                      onClick={() => {
-                        onSelect(null);
-                        setExpandedSection(null);
-                      }}
-                      className={`w-full text-left px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all flex items-center gap-3 border ${
-                        !selectedBorder 
-                          ? 'bg-white border-blue-200 text-blue-700 shadow-md translate-x-1' 
-                          : 'bg-transparent border-transparent hover:bg-white hover:border-gray-200 text-gray-500'
-                      }`}
-                    >
-                      <div className={`w-2 h-2 rounded-full ${!selectedBorder ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'}`} />
-                      Бүх боомт
-                    </button>
-                    {borders.map((b) => (
-                      <button
-                        key={b.id}
-                        onClick={() => {
-                          onSelect(b);
-                          setExpandedSection(null);
-                        }}
-                        className={`w-full text-left px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all flex items-center gap-3 border ${
-                          selectedBorder?.id === b.id 
-                            ? 'bg-white border-blue-200 text-blue-700 shadow-md translate-x-1' 
-                            : 'bg-transparent border-transparent hover:bg-white hover:border-gray-200 text-gray-500'
-                        }`}
-                      >
-                        <div className={`w-2 h-2 rounded-full ${selectedBorder?.id === b.id ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-gray-300'}`} />
-                        {b.name}
-                      </button>
-                    ))}
-                  </div>
+                <div className="h-[440px]">
+                  <PortSelector 
+                    borders={borders}
+                  />
                 </div>
               </motion.div>
             </div>
@@ -411,7 +288,7 @@ export function Sidebar({
               {borders.map(b => (
                 <button 
                   key={b.id} 
-                  onClick={() => onSelect(b)}
+                  onClick={() => setSelectedBorder(b)}
                   className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${
                     selectedBorder?.id === b.id 
                       ? 'bg-blue-600 border-blue-700 text-white shadow-lg shadow-blue-200' 
@@ -437,7 +314,7 @@ export function Sidebar({
                 <div className="p-5 pb-3">
                   {globalFilter.goodId && (
                     <button 
-                      onClick={() => onSelect(null)}
+                      onClick={() => setSelectedBorder(null)}
                       className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-blue-100 transition-colors w-full mb-4 border border-blue-100"
                     >
                       <ArrowRight className="w-3.5 h-3.5 rotate-180" />
@@ -446,8 +323,8 @@ export function Sidebar({
                   )}
                   
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={`px-2 py-0.5 text-white text-[9px] font-black uppercase rounded shadow-sm ${portStatusColorMap[selectedBorder.operationalStatus]}`}>{selectedBorder.operationalStatus}</span>
-                    <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shadow-sm ${trafficColorMap[selectedBorder.trafficStatus]}`}>
+                    <span className={`px-2 py-0.5 text-white text-[9px] font-black uppercase rounded shadow-sm ${PORT_STATUS_COLOR_MAP[selectedBorder.operationalStatus]}`}>{selectedBorder.operationalStatus}</span>
+                    <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shadow-sm ${TRAFFIC_COLOR_MAP[selectedBorder.trafficStatus]}`}>
                       {selectedBorder.trafficStatus}
                     </div>
                     <div className="ml-auto">
@@ -463,7 +340,7 @@ export function Sidebar({
                     </div>
                     {selectedBorder.transportTypes.map(t => (
                       <div key={t} className="text-[10px] font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
-                        {transportIconMap[t]}
+                        {TRANSPORT_ICON_MAP[t]}
                       </div>
                     ))}
                   </div>
@@ -510,32 +387,11 @@ export function Sidebar({
                   >
                     {/* Unified Header Image inside Info Tab */}
                     {displayImage && (
-                      <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm aspect-video bg-gray-50 flex items-center justify-center relative mb-6 group">
-                        <img 
-                          src={displayImage} 
-                          alt={selectedBorder.name} 
-                          className="w-full h-full object-cover transition-opacity duration-300"
-                          referrerPolicy="no-referrer"
-                          onLoad={(e) => { e.currentTarget.style.opacity = '1'; }}
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            const placeholder = e.currentTarget.nextElementSibling as HTMLElement;
-                            if (placeholder) placeholder.style.display = 'flex';
-                          }}
-                          style={{ opacity: 0 }}
-                        />
-                        {/* Custom Error Placeholder */}
-                        <div 
-                          className="hidden absolute inset-0 flex-col items-center justify-center text-gray-400 p-8 bg-gray-100"
-                          style={{ display: 'none' }}
-                        >
-                          <svg className="w-10 h-10 mb-2 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          <span className="text-[10px] font-bold uppercase tracking-widest">Зураг олдсонгүй</span>
-                        </div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                      </div>
+                      <PortImage 
+                        src={displayImage} 
+                        alt={selectedBorder.name} 
+                        className="rounded-2xl border border-gray-100 aspect-video mb-6"
+                      />
                     )}
 
                     {selectedBorder.description && (
@@ -754,9 +610,11 @@ export function Sidebar({
                     {selectedBorder.development ? (
                       <div className="bg-white rounded-2xl border border-indigo-100 overflow-hidden shadow-sm">
                         {selectedBorder.development.imageUrl && (
-                          <div className="w-full h-40 bg-gray-100">
-                            <img src={selectedBorder.development.imageUrl} alt={selectedBorder.development.projectName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          </div>
+                          <PortImage 
+                            src={selectedBorder.development.imageUrl} 
+                            alt={selectedBorder.development.projectName} 
+                            className="w-full h-40"
+                          />
                         )}
                         <div className="p-4 space-y-3">
                           <div className="text-[12px] font-bold text-gray-900 leading-tight">{selectedBorder.development.projectName}</div>
@@ -815,8 +673,8 @@ export function Sidebar({
                   <section key={status} className="space-y-3">
                     <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
                       {status === 'ok' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500"/> : <AlertTriangle className="w-3.5 h-3.5 text-orange-500"/>}
-                      <h4 className={`text-[11px] font-black uppercase tracking-widest ${statusColorMap[status].split(' ')[0]}`}>
-                        {statusLabelMap[status]} ({ports.length})
+                      <h4 className={`text-[11px] font-black uppercase tracking-widest ${STATUS_COLOR_MAP[status].split(' ')[0]}`}>
+                        {STATUS_LABEL_MAP[status]} ({ports.length})
                       </h4>
                     </div>
                     <div className="grid grid-cols-1 gap-2">
@@ -824,9 +682,9 @@ export function Sidebar({
                         <button
                           key={port.id}
                           onClick={() => {
-                            onSelect(port);
+                            setSelectedBorder(port);
                           }}
-                          className={`flex items-center justify-between p-3 rounded-xl border transition-all hover:shadow-md text-left active:scale-[0.98] ${statusColorMap[status]}`}
+                          className={`flex items-center justify-between p-3 rounded-xl border transition-all hover:shadow-md text-left active:scale-[0.98] ${STATUS_COLOR_MAP[status]}`}
                         >
                           <div className="flex items-center gap-3">
                             <MapPin className="w-4 h-4 opacity-50" />
@@ -869,6 +727,43 @@ export function Sidebar({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Active State Bar */}
+      <AnimatePresence>
+        {!isCollapsed && (globalFilter.goodId || selectedBorder) && (
+          <motion.div 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 20, opacity: 0 }}
+            className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-2 shrink-0 z-30"
+          >
+            {globalFilter.goodId && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 text-white rounded-lg shadow-md shadow-blue-100 transition-all hover:scale-105">
+                <span className="text-xs">{selectedGood?.icon}</span>
+                <span className="text-[10px] font-black uppercase tracking-wider">{selectedGood?.name}</span>
+                <button 
+                  onClick={() => setGlobalFilter({ goodId: null })}
+                  className="p-0.5 hover:bg-white/20 rounded transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+            {selectedBorder && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-800 text-white rounded-lg shadow-md transition-all hover:scale-105">
+                <MapPin className="w-3 h-3 text-blue-400" />
+                <span className="text-[10px] font-black uppercase tracking-wider">{selectedBorder.name}</span>
+                <button 
+                  onClick={() => setSelectedBorder(null)}
+                  className="p-0.5 hover:bg-white/20 rounded transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-100 bg-gray-50">
