@@ -173,6 +173,7 @@ export async function parseBudget(file: File): Promise<ParseReport<NewBudget>> {
     if (!title) return;
     if (/^(I|II|III|IV|V|VI)\./.test(title)) {
       section = title;
+      parent = null;
       return;
     }
     if (!section || title === "Шинэ" || /^НИЙТ/i.test(title)) return;
