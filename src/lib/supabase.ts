@@ -8,22 +8,11 @@ const DEFAULT_SUPABASE_KEY = 'sb_publishable_fVGinlvNn-0H_3ZTI8a3Dw_Z8slHzIl';
 export const getSupabase = () => {
   if (supabaseInstance) return supabaseInstance;
 
-  // 1. Try localStorage first (User input fallback)
-  let supabaseUrl = localStorage.getItem('CUSTOM_SUPABASE_URL');
-  let supabaseAnonKey = localStorage.getItem('CUSTOM_SUPABASE_ANON_KEY');
-
-  // 2. Try environment variables
-  if (!supabaseUrl || !supabaseAnonKey) {
-    supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  }
-
-  // 3. Анхдагч төсөл. Publishable түлхүүр нь нийтэд ил байх зориулалттай;
-  //    өгөгдлийн хамгаалалтыг RLS дүрэм (app_staff жагсаалт) хариуцна.
-  if (!supabaseUrl || !supabaseAnonKey) {
-    supabaseUrl = DEFAULT_SUPABASE_URL;
-    supabaseAnonKey = DEFAULT_SUPABASE_KEY;
-  }
+  // Бүх өгөгдөл (тоног төхөөрөмж, эрх, засвар) нэг төсөлд байна.
+  // Vercel-ийн хуучин VITE_SUPABASE_* хувьсагч эсвэл хөтчид үлдсэн
+  // CUSTOM_SUPABASE_* утга устсан төсөл рүү чиглэж болзошгүй тул ашиглахгүй.
+  const supabaseUrl: string = DEFAULT_SUPABASE_URL;
+  const supabaseAnonKey: string = DEFAULT_SUPABASE_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error(
