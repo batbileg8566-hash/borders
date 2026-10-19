@@ -44,4 +44,4 @@ export const resetSupabaseInstance = () => {
 };
 
 // For backward compatibility
-export const supabase = getSupabase();
+// Модуль ачааллахад клиент үүсгэхгүй — getSupabase()-ийг шаардлагатай үед дуудна

@@ -1,20 +1,45 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Боомтын эрх зүйн сан
 
-# Run and deploy your AI Studio app
+Хилийн боомт, гүний гааль, гаалийн бүсээр нэвтрүүлэх бараа болон холбогдох
+Засгийн газрын тогтоол, хуулийн нэгдсэн мэдээллийн сан (React + Vite + Leaflet).
 
-This contains everything you need to run your app locally.
+## Бүтэц
 
-View your app in AI Studio: https://ai.studio/apps/52eb86c1-9dc1-4f43-a730-125b5988cf0b
+| Хаяг | Агуулга |
+| --- | --- |
+| `#/` | Газрын зураг: ангилал, бараа, импорт/экспортоор шүүх |
+| `#/port/:id` | Нэгжийн дэлгэрэнгүй: зөвшөөрөгдсөн бараа, санал, лаборатори, дэд бүтэц |
+| `#/goods` | Бараа × боомтын хүснэгт |
+| `#/goods/:id` | Тухайн барааг нэвтрүүлэх боомт, эрх зүйн үндэслэл |
+| `#/acts`, `#/acts/:id` | Эрх зүйн акт ба түүгээр тогтоосон боомт, бараа |
+| `#/proposals` | Тогтоолд нэмэх саналууд (Excel экспорттой) |
+| `#/registry` | Нэгдсэн бүртгэл (Excel экспорттой) |
 
-## Run Locally
+```
+src/
+  data/            статик өгөгдөл (боомт, бараа, тогтоол)
+  lib/registry.ts  боомт ↔ бараа ↔ тогтоолын холбоос, тогтоолын дугаар нормчлол
+  lib/DataProvider Supabase/localStorage засварыг давхарлаж нэгтгэнэ
+  lib/router.ts    hash router (хаяг бүрийг хуваалцаж болно)
+  views/           хуудсууд
+  components/      Shell, PortMap, ChatPanel, ui
+api/chat.ts        Gemini туслахын serverless функц (түлхүүр серверт)
+```
 
-**Prerequisites:**  Node.js
+## Ажиллуулах
 
+```bash
+npm install
+npm run dev
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Туслахыг локалд турших бол `vercel dev`-ийг ажиллуулаад
+`API_PROXY=http://localhost:3001 npm run dev`.
+
+## Орчны хувьсагч (Vercel → Settings → Environment Variables)
+
+| Нэр | Тайлбар |
+| --- | --- |
+| `GEMINI_API_KEY` | Зөвхөн сервер талд. **`VITE_` угтвар бүү хэрэглэ.** |
+| `GEMINI_MODEL` | Сонголтоор, анхдагч `gemini-3-flash-preview` |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Засварын өгөгдөл (сонголтоор) |

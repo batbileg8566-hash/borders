@@ -1,187 +1,175 @@
-import React, { useState, useRef, useEffect } from "react";
-import { GoogleGenAI } from "@google/genai";
-import { motion, AnimatePresence } from "motion/react";
-import { MessageSquare, Send, X, Bot, User, Loader2, Sparkles } from "lucide-react";
-import { borderCrossings } from "../data";
-import { BorderCrossing } from "../types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Send, X, Loader2 } from "lucide-react";
+import type { BorderCrossing } from "../types";
+import { useData } from "../lib/DataProvider";
+import { categoryOf } from "../lib/registry";
+import { GOODS } from "../data";
 
 interface Message {
   role: "user" | "model";
   text: string;
 }
 
-export function ChatPanel({ selectedBorder, onClose }: { selectedBorder: BorderCrossing | null, onClose?: () => void }) {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "model", text: "Сайн байна уу? Би боомтын мэдээллийн туслах байна. Танд юугаар туслах вэ?" }
-  ]);
+/** Мэдээллийн санг загварт ойлгомжтой, товч мөр болгон хувиргана. */
+function buildContext(ports: BorderCrossing[]) {
+  const goodName = (id: string) => GOODS.find((g) => g.id === id)?.name ?? id;
+  const entry = (e: { goodId: string; resolutions: string[]; conditions?: string }) =>
+    `${goodName(e.goodId)} [${e.resolutions.join(", ")}]${e.conditions ? ` (${e.conditions})` : ""}`;
+  return ports
+    .map((b) => {
+      const parts = [
+        `${categoryOf(b)}${b.subCategory ? ` / ${b.subCategory}` : ""}: ${b.name}`,
+        `Байршил: ${b.region}${b.neighborPortName ? `, хөрш: ${b.neighborPortName}` : ""}`,
+        `Горим: ${b.operationalStatus}, тээвэр: ${b.transportTypes.join(", ")}`,
+        `Лаборатори: ${b.hasLaboratory ? b.labCapabilities?.join(", ") || "тийм" : "үгүй"}`,
+        `Импорт: ${b.legalImports?.map(entry).join("; ") || "—"}`,
+        `Экспорт: ${b.legalExports?.map(entry).join("; ") || "—"}`,
+        `Нэмэх санал: ${b.proposedAdditions?.map((p) => `${p.text} → ${p.targetResolution}`).join("; ") || "—"}`,
+      ];
+      return parts.join(". ");
+    })
+    .join("\n");
+}
+
+const SUGGESTIONS = [
+  "Эм, эмнэлгийн хэрэгслийг аль боомтоор импортлох вэ?",
+  "Тэсэрч дэлбэрэх бодис нэвтрүүлэх боомтууд",
+  "Лабораторигүй ч мал, амьтан нэвтрүүлдэг боомт бий юу?",
+];
+
+export function ChatPanel({ focus, onClose }: { focus: BorderCrossing | null; onClose: () => void }) {
+  const { ports } = useData();
+  const context = useMemo(() => buildContext(ports), [ports]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messages, loading]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  useEffect(() => {
+    inputRef.current?.focus();
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
 
-    const userMessage = input.trim();
+  const send = async (text: string) => {
+    const t = text.trim();
+    if (!t || loading) return;
+    const next = [...messages, { role: "user" as const, text: t }];
+    setMessages(next);
     setInput("");
-    setMessages(prev => [...prev, { role: "user", text: userMessage }]);
-    setIsLoading(true);
-
+    setLoading(true);
+    setError(null);
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("GEMINI_API_KEY is not defined");
-      }
-      const ai = new GoogleGenAI({ apiKey });
-      
-      // Generate a compressed string of ALL ports for the AI to reference
-      const globalDatabase = borderCrossings.map(b => {
-        const category = b.category || 'Боомт';
-        const sub = b.subCategory || '';
-        const imports = b.legalImports?.map(i => i.text).join(', ') || 'Байхгүй';
-        const exports = b.legalExports?.map(e => e.text).join(', ') || 'Байхгүй';
-        const labs = b.hasLaboratory ? (b.labCapabilities?.join(', ') || 'Тийм') : 'Байхгүй';
-        const proposed = b.proposedAdditions?.map(p => p.text).join(', ') || 'Байхгүй';
-        return `[${category}${sub ? ' / ' + sub : ''}: ${b.name}] Байршил: ${b.region}, Статус: ${b.operationalStatus}. Лаборатори: ${labs}. Импорт: ${imports}. Экспорт: ${exports}. Нэмэх санал: ${proposed}.`;
-      }).join('\n');
-
-      const systemPrompt = `
-You are a professional, highly intelligent Customs and Border Port Assistant for Mongolia. 
-You have access to the following global database of all border ports, deep customs, and economic zones:
-
-DATABASE:
-${globalDatabase}
-
-INSTRUCTIONS:
-1. You MUST answer the user's question directly using the DATABASE above. 
-2. NEVER tell the user to "select a port first" or "I cannot answer". If they ask about a specific port by name, find it in the DATABASE and give a precise, helpful answer immediately.
-3. If a port is currently selected in the UI, its name is: ${selectedBorder?.name || 'Сонгогдоогүй байна'}. You can prioritize this context if the user says "энэ боомт" (this port).
-4. Always answer in clear, polite Mongolian language.
-5. You have information on:
-- 23 border crossings (Боомт)
-- Deep customs offices (Гүний гааль)
-- Control zones (Хяналтын бүс)
-- Bonded zones (Баталгаат бүс)
-- Free zones (Чөлөөт бүс)
-
-USER QUESTION: ${userMessage}
-`;
-
-      // Build conversation history for the SDK
-      const history = messages.map(m => ({
-        role: m.role === 'user' ? 'user' as const : 'model' as const,
-        parts: [{ text: m.text }],
-      }));
-
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          { role: "user", parts: [{ text: systemPrompt }] },
-          { role: "model", parts: [{ text: "Ойлголоо. Хариултаа Монгол хэлээр өгье." }] },
-          ...history,
-          { role: "user", parts: [{ text: userMessage }] },
-        ],
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: next, context, focus: focus?.name ?? "" }),
       });
-
-      const responseText = response.text || "Уучлаарай, хариулт авахад алдаа гарлаа.";
-      setMessages(prev => [...prev, { role: "model", text: responseText }]);
-    } catch (error) {
-      console.error("Gemini Error:", error);
-      setMessages(prev => [...prev, { role: "model", text: "Алдаа гарлаа. Түр хүлээгээд дахин оролдоно уу." }]);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Сервер ${res.status} алдаа буцаалаа.`);
+      setMessages((m) => [...m, { role: "model", text: data.text || "Хариулт хоосон ирлээ." }]);
+    } catch (e: any) {
+      setError(e?.message || "Туслахтай холбогдож чадсангүй.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <motion.div 
-      initial={{ x: 300, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: 300, opacity: 0 }}
-      className="w-[350px] bg-white border-l border-gray-200 h-full flex flex-col shadow-2xl z-30"
-    >
-      {/* Header */}
-      <div className="p-4 border-b border-gray-100 bg-blue-600 text-white flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5" />
-          <h2 className="font-black text-sm uppercase tracking-widest">AI Туслах</h2>
-        </div>
-        {onClose && (
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+    <div className="fixed inset-0 z-[2500] flex justify-end no-print" role="dialog" aria-modal="true" aria-label="Мэдээллийн туслах">
+      <button className="absolute inset-0 bg-ink-2/30" onClick={onClose} aria-label="Хаах" />
+      <div className="relative w-full sm:w-[420px] h-full bg-surface border-l border-rule flex flex-col">
+        <div className="h-14 px-4 flex items-center justify-between bg-ink text-white shrink-0">
+          <div>
+            <p className="font-serif font-bold text-[16px] leading-tight">Мэдээллийн туслах</p>
+            <p className="text-[12px] text-white/70 leading-tight">Зөвхөн энэ сангийн өгөгдлөөр хариулна</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-[3px] hover:bg-white/10" aria-label="Хаах">
             <X className="w-5 h-5" />
           </button>
-        )}
-      </div>
+        </div>
 
-      {/* Messages */}
-      <div 
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-gray-50/50"
-      >
-        <AnimatePresence initial={false}>
-          {messages.map((msg, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${
-                msg.role === 'user' 
-                  ? 'bg-blue-600 text-white rounded-tr-none' 
-                  : 'bg-white border border-gray-100 text-gray-700 shadow-sm rounded-tl-none'
-              }`}>
-                <div className="flex items-center gap-2 mb-1 opacity-50">
-                  {msg.role === 'model' ? <Bot className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                  <span className="text-[10px] font-bold uppercase tracking-wider">
-                    {msg.role === 'model' ? 'Gemini AI' : 'Та'}
-                  </span>
-                </div>
-                <div className="leading-relaxed font-medium">
-                  {msg.text}
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-white border border-gray-100 p-3 rounded-2xl shadow-sm flex items-center gap-2">
-              <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
-              <span className="text-[10px] font-bold text-gray-400 uppercase animate-pulse">Бичиж байна...</span>
+        <div ref={scrollRef} className="flex-1 overflow-auto thin-scroll px-4 py-4 space-y-3">
+          {messages.length === 0 && (
+            <div className="space-y-3">
+              <p className="text-[14px] text-muted">
+                Бараа, боомт, тогтоолын талаар асууна уу.{focus ? ` Одоо «${focus.name}» нэгжийг харж байна.` : ""}
+              </p>
+              <ul className="space-y-2">
+                {SUGGESTIONS.map((s) => (
+                  <li key={s}>
+                    <button
+                      onClick={() => send(s)}
+                      className="w-full text-left text-[14px] px-3 py-2 border border-rule rounded-[3px] hover:border-ink text-ink"
+                    >
+                      {s}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} className={m.role === "user" ? "flex justify-end" : ""}>
+              <div
+                className={`max-w-[88%] text-[14px] whitespace-pre-wrap px-3 py-2 rounded-[3px] ${
+                  m.role === "user" ? "bg-ink text-white" : "bg-paper border border-rule-soft text-text"
+                }`}
+              >
+                {m.text}
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <p className="flex items-center gap-2 text-[13px] text-muted">
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> Хариулт бэлтгэж байна
+            </p>
+          )}
+          {error && <p className="text-[13px] text-flag border border-flag/30 bg-flag/5 px-3 py-2 rounded-[3px]">{error}</p>}
+        </div>
 
-      {/* Input */}
-      <div className="p-4 border-t border-gray-100 bg-white">
-        <div className="relative">
-          <input
-            type="text"
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send(input);
+          }}
+          className="p-3 border-t border-rule flex gap-2 shrink-0"
+        >
+          <label htmlFor="chat-input" className="sr-only">
+            Асуулт
+          </label>
+          <textarea
+            id="chat-input"
+            ref={inputRef}
+            rows={2}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Асуултаа энд бичнэ үү..."
-            className="w-full pl-4 pr-12 py-3 bg-gray-100 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 transition-all font-medium"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send(input);
+              }
+            }}
+            placeholder="Асуултаа бичнэ үү"
+            className="flex-1 resize-none px-3 py-2 border border-rule rounded-[3px] text-[14px] focus:border-ink outline-none"
           />
           <button
-            onClick={handleSend}
-            disabled={isLoading || !input.trim()}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-all shadow-md shadow-blue-200"
+            type="submit"
+            disabled={!input.trim() || loading}
+            className="w-11 shrink-0 grid place-items-center bg-ink text-white rounded-[3px] disabled:opacity-40"
+            aria-label="Илгээх"
           >
             <Send className="w-4 h-4" />
           </button>
-        </div>
-        <p className="mt-2 text-[9px] text-gray-400 text-center font-bold uppercase tracking-widest">
-          Gemini 3 Flash • Бодит мэдээлэлд тулгуурласан
-        </p>
+        </form>
       </div>
-    </motion.div>
+    </div>
   );
 }
