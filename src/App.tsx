@@ -7,6 +7,8 @@ import { PortDetail } from "./views/PortDetail";
 import { GoodDetail, GoodsMatrix } from "./views/GoodsViews";
 import { AboutView, ProposalsView, RegistryView, RegulationDetail, RegulationsList } from "./views/LegalViews";
 import { SITE } from "./config/site";
+import { EquipmentProvider } from "./lib/equipment";
+import { EquipmentOverview, OfficeEquipment } from "./views/EquipmentViews";
 
 // Ховор ашиглагддаг хэсгүүдийг шаардлагатай үед нь ачаална
 const ChatPanel = lazy(() => import("./components/ChatPanel").then((m) => ({ default: m.ChatPanel })));
@@ -54,6 +56,11 @@ function Routes() {
       title = "Нэгдсэн бүртгэл";
       view = <RegistryView />;
       break;
+    case "equipment":
+      current = "equipment";
+      title = "Тоног төхөөрөмж";
+      view = id === "office" && path[2] ? <OfficeEquipment code={path[2]} /> : <EquipmentOverview />;
+      break;
     case "about":
       current = "about";
       title = "Эх сурвалж";
@@ -90,7 +97,9 @@ function Routes() {
 export default function App() {
   return (
     <DataProvider>
-      <Routes />
+      <EquipmentProvider>
+        <Routes />
+      </EquipmentProvider>
     </DataProvider>
   );
 }

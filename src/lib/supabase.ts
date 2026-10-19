@@ -2,6 +2,9 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let supabaseInstance: SupabaseClient | null = null;
 
+const DEFAULT_SUPABASE_URL = 'https://gntwkruukiqqryjxghgr.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_fVGinlvNn-0H_3ZTI8a3Dw_Z8slHzIl';
+
 export const getSupabase = () => {
   if (supabaseInstance) return supabaseInstance;
 
@@ -13,6 +16,13 @@ export const getSupabase = () => {
   if (!supabaseUrl || !supabaseAnonKey) {
     supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  }
+
+  // 3. Анхдагч төсөл. Publishable түлхүүр нь нийтэд ил байх зориулалттай;
+  //    өгөгдлийн хамгаалалтыг RLS дүрэм (app_staff жагсаалт) хариуцна.
+  if (!supabaseUrl || !supabaseAnonKey) {
+    supabaseUrl = DEFAULT_SUPABASE_URL;
+    supabaseAnonKey = DEFAULT_SUPABASE_KEY;
   }
 
   if (!supabaseUrl || !supabaseAnonKey) {

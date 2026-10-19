@@ -6,6 +6,7 @@ import { href } from "../lib/router";
 import { TRANSPORT_LABEL, cellFor, categoryOf, neighborCountry, proposalDirection } from "../lib/registry";
 import { Button, Empty, KV, Legend, Page, PageHeader, RefChip, Section, StatusMark, fmt } from "../components/ui";
 import { PortMap } from "../components/PortMap";
+import { PortEquipmentSection } from "./EquipmentViews";
 
 function GoodsTable({ port }: { port: BorderCrossing }) {
   const rows = GOODS.map((g) => ({ g, c: cellFor(port, g.id) }));
@@ -154,6 +155,8 @@ export function PortDetail({ id }: { id: string }) {
                 ) : null}
               </Section>
             )}
+
+            <PortEquipmentSection port={port} />
 
             {dev && (
               <Section title="Бүтээн байгуулалт" aside={`Гүйцэтгэл ${dev.progress}%`}>

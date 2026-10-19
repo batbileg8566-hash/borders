@@ -10,6 +10,7 @@ export const NAV = [
   { key: "goods", path: "/goods", label: "Бараа ба боомт" },
   { key: "acts", path: "/acts", label: "Эрх зүйн акт" },
   { key: "proposals", path: "/proposals", label: "Нэмэх санал" },
+  { key: "equipment", path: "/equipment", label: "Тоног төхөөрөмж" },
   { key: "registry", path: "/registry", label: "Нэгдсэн бүртгэл" },
 ] as const;
 
