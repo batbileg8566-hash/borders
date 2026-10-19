@@ -8,6 +8,7 @@ import { GoodDetail, GoodsMatrix } from "./views/GoodsViews";
 import { AboutView, ProposalsView, RegistryView, RegulationDetail, RegulationsList } from "./views/LegalViews";
 import { SITE } from "./config/site";
 import { EquipmentProvider } from "./lib/equipment";
+import { PasswordRecovery } from "./components/EquipmentGate";
 import { EquipmentOverview, OfficeEquipment } from "./views/EquipmentViews";
 
 // Ховор ашиглагддаг хэсгүүдийг шаардлагатай үед нь ачаална
@@ -84,6 +85,7 @@ function Routes() {
       <Shell current={current} fullBleed={fullBleed} onOpenChat={() => setChatOpen(true)} onOpenAdmin={() => setAdminOpen(true)}>
         {view}
       </Shell>
+      <PasswordRecovery />
       <Suspense fallback={null}>
         {chatOpen && <ChatPanel focus={focus} onClose={() => setChatOpen(false)} />}
         {adminOpen && (

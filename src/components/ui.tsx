@@ -177,14 +177,14 @@ export function Segmented<T extends string>({
   label: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex border border-ink rounded-[3px] overflow-hidden">
+    <div role="radiogroup" aria-label={label} className="inline-flex max-w-full overflow-x-auto no-scrollbar border border-ink rounded-[3px]">
       {options.map((o) => (
         <button
           key={o.value}
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`px-3 py-1 text-[13px] font-medium border-l border-ink first:border-l-0 ${
+          className={`px-3 py-1 text-[13px] font-medium whitespace-nowrap border-l border-ink first:border-l-0 ${
             value === o.value ? "bg-ink text-white" : "bg-surface text-ink hover:bg-paper"
           }`}
         >

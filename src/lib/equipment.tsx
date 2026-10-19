@@ -101,6 +101,42 @@ export const fmtMnt = (n: number) => {
 
 // ─── Хандалт ─────────────────────────────────────────────────────────────────
 
+export interface AccessRequest {
+  id: number;
+  user_id: string;
+  email: string;
+  full_name: string;
+  office: string | null;
+  position: string | null;
+  reason: string | null;
+  status: "pending" | "approved" | "rejected";
+  role_granted: string | null;
+  created_at: string;
+  decided_at: string | null;
+  decided_by: string | null;
+}
+
+export interface StaffRow {
+  email: string;
+  role: "viewer" | "editor" | "admin";
+  added_at: string;
+}
+
+export const ROLE_LABEL: Record<string, string> = {
+  viewer: "Харах",
+  editor: "Харах, боомт хуваарилах",
+  admin: "Админ",
+};
+
+const authError = (m: string) => {
+  if (/invalid login/i.test(m)) return "Имэйл эсвэл нууц үг буруу байна.";
+  if (/not confirmed/i.test(m)) return "Имэйл хаяг баталгаажаагүй байна. Ирсэн захидлын холбоос дээр дарна уу.";
+  if (/already registered/i.test(m)) return "Энэ имэйлээр бүртгэл үүссэн байна. Нэвтрэх эсвэл нууц үгээ сэргээнэ үү.";
+  if (/at least/i.test(m) && /password/i.test(m)) return "Нууц үг хэт богино байна (6-аас доошгүй тэмдэгт).";
+  if (/rate limit|too many/i.test(m)) return "Хэт олон оролдлого хийлээ. Хэсэг хүлээгээд дахин оролдоно уу.";
+  return m;
+};
+
 export type AccessState = "unconfigured" | "loading" | "signed-out" | "denied" | "ok" | "error";
 
 interface EquipmentState {
@@ -112,6 +148,18 @@ interface EquipmentState {
   canEdit: boolean;
   isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<string | null>;
+  signUp: (email: string, password: string) => Promise<{ error: string | null; needsConfirm: boolean }>;
+  sendReset: (email: string) => Promise<string | null>;
+  updatePassword: (password: string) => Promise<string | null>;
+  recovering: boolean;
+  endRecovery: () => void;
+  myRequest: AccessRequest | null;
+  submitRequest: (r: { full_name: string; office: string; position: string; reason: string }) => Promise<string | null>;
+  requests: AccessRequest[];
+  staff: StaffRow[];
+  decide: (id: number, approve: boolean, role?: string) => Promise<string | null>;
+  setStaffRole: (email: string, role: string) => Promise<string | null>;
+  revokeStaff: (email: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   reload: () => void;
   assignPort: (ids: number[], portId: string | null) => Promise<string | null>;
@@ -141,11 +189,22 @@ export function EquipmentProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [recovering, setRecovering] = useState(false);
+  const [myRequest, setMyRequest] = useState<AccessRequest | null>(null);
+  const [requests, setRequests] = useState<AccessRequest[]>([]);
+  const [staff, setStaff] = useState<StaffRow[]>([]);
 
   useEffect(() => {
     if (!sb) return;
     sb.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data } = sb.auth.onAuthStateChange((event, s) => {
+      setSession(s);
+      if (event === "PASSWORD_RECOVERY") setRecovering(true);
+    });
+    // Имэйлийн холбоосоор ирсэн ?code=... параметрийг хаягаас цэвэрлэнэ
+    if (new URLSearchParams(location.search).has("code")) {
+      setTimeout(() => history.replaceState(null, "", location.pathname + location.hash), 1500);
+    }
     return () => data.subscription.unsubscribe();
   }, [sb]);
 
@@ -164,8 +223,27 @@ export function EquipmentProvider({ children }: { children: ReactNode }) {
         const { data: r, error: re } = await sb.rpc("staff_role");
         if (re) throw re;
         if (!r) {
-          if (alive) setAccess("denied");
+          const { data: mine } = await sb
+            .from("access_requests")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(1);
+          if (alive) {
+            setMyRequest((mine?.[0] as AccessRequest) ?? null);
+            setRole(null);
+            setAccess("denied");
+          }
           return;
+        }
+        if (r === "admin") {
+          const [{ data: rq }, { data: st }] = await Promise.all([
+            sb.from("access_requests").select("*").order("created_at", { ascending: false }),
+            sb.from("app_staff").select("*").order("added_at"),
+          ]);
+          if (alive) {
+            setRequests((rq ?? []) as AccessRequest[]);
+            setStaff((st ?? []) as StaffRow[]);
+          }
         }
         const [a, b] = await Promise.all([fetchAll<EquipmentItem>("equipment_items"), fetchAll<BudgetItem>("equipment_budget")]);
         if (!alive) return;
@@ -184,12 +262,92 @@ export function EquipmentProvider({ children }: { children: ReactNode }) {
     };
   }, [sb, session?.user?.id, tick]);
 
+  const redirectTo = () => `${location.origin}${location.pathname}`;
+
   const signIn = useCallback(
     async (email: string, password: string) => {
       if (!sb) return "Supabase тохируулагдаагүй байна.";
       const { error } = await sb.auth.signInWithPassword({ email, password });
-      if (!error) return null;
-      return /invalid/i.test(error.message) ? "Имэйл эсвэл нууц үг буруу байна." : error.message;
+      return error ? authError(error.message) : null;
+    },
+    [sb],
+  );
+
+  const signUp = useCallback(
+    async (email: string, password: string) => {
+      if (!sb) return { error: "Supabase тохируулагдаагүй байна.", needsConfirm: false };
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo() } });
+      if (error) return { error: authError(error.message), needsConfirm: false };
+      // Бүртгэлтэй имэйлээр дахин бүртгүүлэхэд identities хоосон ирдэг
+      if (data.user && data.user.identities?.length === 0)
+        return { error: "Энэ имэйлээр бүртгэл үүссэн байна. Нэвтрэх эсвэл нууц үгээ сэргээнэ үү.", needsConfirm: false };
+      return { error: null, needsConfirm: !data.session };
+    },
+    [sb],
+  );
+
+  const sendReset = useCallback(
+    async (email: string) => {
+      if (!sb) return "Supabase тохируулагдаагүй байна.";
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectTo() });
+      return error ? authError(error.message) : null;
+    },
+    [sb],
+  );
+
+  const updatePassword = useCallback(
+    async (password: string) => {
+      if (!sb) return "Supabase тохируулагдаагүй байна.";
+      const { error } = await sb.auth.updateUser({ password });
+      return error ? authError(error.message) : null;
+    },
+    [sb],
+  );
+
+  const submitRequest = useCallback(
+    async (r: { full_name: string; office: string; position: string; reason: string }) => {
+      if (!sb) return "Supabase тохируулагдаагүй байна.";
+      const { data, error } = await sb
+        .from("access_requests")
+        .insert({ full_name: r.full_name.trim(), office: r.office.trim() || null, position: r.position.trim() || null, reason: r.reason.trim() || null })
+        .select()
+        .single();
+      if (error) return /duplicate|unique/i.test(error.message) ? "Таны өмнөх хүсэлт шийдвэрлэгдээгүй байна." : error.message;
+      setMyRequest(data as AccessRequest);
+      return null;
+    },
+    [sb],
+  );
+
+  const decide = useCallback(
+    async (id: number, approve: boolean, grant = "viewer") => {
+      if (!sb) return "Supabase тохируулагдаагүй байна.";
+      const { error } = await sb.rpc("decide_access_request", { req_id: id, approve, grant_role: grant });
+      if (error) return error.message;
+      setTick((t) => t + 1);
+      return null;
+    },
+    [sb],
+  );
+
+  const setStaffRole = useCallback(
+    async (email: string, newRole: string) => {
+      if (!sb) return "Supabase тохируулагдаагүй байна.";
+      const { error } = await sb.from("app_staff").update({ role: newRole }).eq("email", email);
+      if (error) return error.message;
+      setStaff((p) => p.map((x) => (x.email === email ? { ...x, role: newRole as StaffRow["role"] } : x)));
+      return null;
+    },
+    [sb],
+  );
+
+  const revokeStaff = useCallback(
+    async (email: string) => {
+      if (!sb) return "Supabase тохируулагдаагүй байна.";
+      const { error } = await sb.from("app_staff").delete().eq("email", email);
+      if (error) return error.message;
+      setStaff((p) => p.filter((x) => x.email !== email));
+      return null;
     },
     [sb],
   );
@@ -219,11 +377,23 @@ export function EquipmentProvider({ children }: { children: ReactNode }) {
       canEdit: role === "editor" || role === "admin",
       isAdmin: role === "admin",
       signIn,
+      signUp,
+      sendReset,
+      updatePassword,
+      recovering,
+      endRecovery: () => setRecovering(false),
+      myRequest,
+      submitRequest,
+      requests,
+      staff,
+      decide,
+      setStaffRole,
+      revokeStaff,
       signOut,
       reload: () => setTick((t) => t + 1),
       assignPort,
     }),
-    [access, session, items, budget, error, role, signIn, signOut, assignPort],
+    [access, session, items, budget, error, role, signIn, signUp, sendReset, updatePassword, recovering, myRequest, submitRequest, requests, staff, decide, setStaffRole, revokeStaff, signOut, assignPort],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

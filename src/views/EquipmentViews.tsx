@@ -16,6 +16,7 @@ import {
 } from "../lib/equipment";
 import { EquipmentGate } from "../components/EquipmentGate";
 import { EquipmentImport } from "../components/EquipmentImport";
+import { StaffAdmin } from "../components/StaffAdmin";
 import { Button, Empty, Page, PageHeader, Section, Segmented, fmt } from "../components/ui";
 import type { BorderCrossing } from "../types";
 
@@ -402,12 +403,13 @@ function BudgetTable({ rows }: { rows: BudgetItem[] }) {
 
 // ─── Хуудсууд ───────────────────────────────────────────────────────────────
 
-type Tab = "summary" | "list" | "budget" | "import";
+type Tab = "summary" | "list" | "budget" | "import" | "users";
 
 export function EquipmentOverview() {
-  const { items, budget, access, isAdmin } = useEquipment();
+  const { items, budget, access, isAdmin, requests } = useEquipment();
+  const pendingCount = requests.filter((r) => r.status === "pending").length;
   const [q, setQ] = useQueryState();
-  const tabs: Tab[] = isAdmin ? ["summary", "list", "budget", "import"] : ["summary", "list", "budget"];
+  const tabs: Tab[] = isAdmin ? ["summary", "list", "budget", "import", "users"] : ["summary", "list", "budget"];
   const tab = (tabs.includes(q.get("tab") as Tab) ? q.get("tab") : "summary") as Tab;
   const empty = access === "ok" && !items.length && !budget.length;
 
@@ -430,10 +432,15 @@ export function EquipmentOverview() {
                 { value: "summary", label: "Нэгтгэл" },
                 { value: "list", label: "Дэлгэрэнгүй жагсаалт" },
                 { value: "budget", label: "2027 төсвийн санал" },
-                ...(isAdmin ? [{ value: "import" as const, label: "Өгөгдөл шинэчлэх" }] : []),
+                ...(isAdmin
+                  ? [
+                      { value: "import" as const, label: "Өгөгдөл шинэчлэх" },
+                      { value: "users" as const, label: pendingCount ? `Хэрэглэгчид (${pendingCount} хүсэлт)` : "Хэрэглэгчид" },
+                    ]
+                  : []),
               ]}
             />
-            {empty && tab !== "import" && (
+            {empty && tab !== "import" && tab !== "users" && (
               <p className="text-[14px] border border-rule bg-surface rounded-[3px] px-4 py-3">
                 Санд тоног төхөөрөмжийн мэдээлэл хараахан ороогүй байна.
                 {isAdmin ? (
@@ -447,6 +454,7 @@ export function EquipmentOverview() {
               </p>
             )}
             {tab === "import" && isAdmin && <EquipmentImport />}
+            {tab === "users" && isAdmin && <StaffAdmin />}
             {tab === "summary" && (
               <>
                 <Kpis items={items} />

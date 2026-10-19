@@ -41,7 +41,10 @@ export const getSupabase = () => {
   }
 
   try {
-    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      // PKCE: имэйлийн холбоос ?code=... хэлбэрээр ирж, hash router-тэй зөрчилдөхгүй
+      auth: { flowType: 'pkce', detectSessionInUrl: true, persistSession: true },
+    });
     return supabaseInstance;
   } catch (err) {
     console.error('Failed to initialize Supabase client:', err);
