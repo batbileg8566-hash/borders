@@ -5,6 +5,7 @@ import { useData } from "../lib/DataProvider";
 import { href, useQueryState } from "../lib/router";
 import {
   EQUIPMENT_CATEGORIES,
+  STATUS_LABEL,
   categoryShort,
   conditionOf,
   fmtMnt,
@@ -17,6 +18,7 @@ import {
 import { EquipmentGate } from "../components/EquipmentGate";
 import { EquipmentImport } from "../components/EquipmentImport";
 import { StaffAdmin } from "../components/StaffAdmin";
+import { AddEquipmentButton, EditEquipmentButton, ItemPhoto } from "../components/EquipmentEditor";
 import { Button, Empty, Page, PageHeader, Section, Segmented, fmt } from "../components/ui";
 import type { BorderCrossing } from "../types";
 
@@ -28,10 +30,15 @@ const COND_TEXT: Record<ItemCondition, string> = {
   ok: "Хэвийн",
 };
 
-function CondLabel({ c }: { c: ItemCondition }) {
+function CondLabel({ it }: { it: EquipmentItem }) {
+  const c = conditionOf(it);
   const cls =
     c === "faulty" ? "text-flag bg-flag/8 border-flag/30" : c === "expired" ? "text-proposed bg-proposed-bg border-proposed/30" : "text-allowed bg-allowed-bg border-allowed/20";
-  return <span className={`inline-block px-1.5 text-[12px] font-medium border rounded-sm whitespace-nowrap ${cls}`}>{COND_TEXT[c]}</span>;
+  return (
+    <span className={`inline-block px-1.5 text-[12px] font-medium border rounded-sm whitespace-nowrap ${cls}`} title={it.status ? STATUS_LABEL[it.status] : undefined}>
+      {it.status === "idle" ? "Нөөцөд" : it.status === "repair" ? "Засварт" : COND_TEXT[c]}
+    </span>
+  );
 }
 
 function Kpis({ items }: { items: EquipmentItem[] }) {
@@ -79,7 +86,12 @@ async function exportItems(items: EquipmentItem[], ports: BorderCrossing[], file
     "Ангилал": categoryShort(it.category),
     "Бүлэг": it.grp ?? "",
     "Нэр": it.name,
+    "Брэнд": it.brand ?? "",
     "Загвар, марк": it.model ?? "",
+    "Зориулалт": it.purpose ?? "",
+    "Хүчин чадал": it.capacity ?? "",
+    "Үйлдвэрлэсэн улс": it.origin_country ?? "",
+    "Үйлдвэрлэсэн он": it.manufacture_year ?? "",
     "Нийлүүлэгч": it.supplier ?? "",
     "Тоо": it.qty,
     "Хэвийн": it.qty_ok ?? "",
@@ -89,11 +101,11 @@ async function exportItems(items: EquipmentItem[], ports: BorderCrossing[], file
     "Ашиглалтын хугацаа (жил)": it.life_years ?? "",
     "Үлдэх хугацаа (жил)": it.remaining_years ?? "",
     "Засварын гэрээ": it.service_contract ?? "",
-    "Төлөв": COND_TEXT[conditionOf(it)],
+    "Төлөв": it.status ? STATUS_LABEL[it.status] : COND_TEXT[conditionOf(it)],
     "Тайлбар": [it.note, it.issue].filter(Boolean).join("; "),
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws["!cols"] = Object.keys(rows[0] ?? {}).map((k) => ({ wch: /Нэр|Загвар|Газар|Тайлбар/.test(k) ? 32 : 14 }));
+  ws["!cols"] = Object.keys(rows[0] ?? {}).map((k) => ({ wch: /Нэр|Загвар|Газар|Тайлбар|Зориулалт/.test(k) ? 32 : 14 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Тоног төхөөрөмж");
   XLSX.writeFile(wb, filename);
@@ -198,13 +210,13 @@ function ItemsTable({ items, showOffice = true }: { items: EquipmentItem[]; show
               <th className="py-2 pr-3 font-medium text-right">Тоо</th>
               <th className="py-2 pr-3 font-medium">Ашиглалтад</th>
               <th className="py-2 pr-3 font-medium text-right">Өртөг</th>
-              <th className="py-2 font-medium">Төлөв</th>
+              <th className="py-2 pr-3 font-medium">Төлөв</th>
+              {canEdit && <th className="py-2 font-medium"><span className="sr-only">Үйлдэл</span></th>}
             </tr>
           </thead>
           <tbody>
             {view.map((it) => {
               const office = officeByCode(it.office_code);
-              const c = conditionOf(it);
               return (
                 <tr key={it.id} className="border-b border-rule-soft align-top">
                   {showOffice && (
@@ -215,9 +227,19 @@ function ItemsTable({ items, showOffice = true }: { items: EquipmentItem[]; show
                     </td>
                   )}
                   <td className="py-1.5 pr-3">
-                    <span className="font-medium text-text">{it.name}</span>
-                    {it.model && <span className="block text-[12.5px] text-muted">{it.model}</span>}
-                    {(it.note || it.issue) && <span className="block text-[12px] text-proposed">{[it.note, it.issue].filter(Boolean).join("; ")}</span>}
+                    <div className="flex gap-2.5">
+                      {it.photo_path && <ItemPhoto path={it.photo_path} size={40} alt={it.name} />}
+                      <div className="min-w-0">
+                        <span className="font-medium text-text">{it.name}</span>
+                        {(it.brand || it.model) && <span className="block text-[12.5px] text-muted">{[it.brand, it.model].filter(Boolean).join(" · ")}</span>}
+                        {(it.capacity || it.origin_country || it.manufacture_year) && (
+                          <span className="block text-[12px] text-muted">
+                            {[it.capacity, it.origin_country, it.manufacture_year && `${it.manufacture_year} он`].filter(Boolean).join(" · ")}
+                          </span>
+                        )}
+                        {(it.note || it.issue) && <span className="block text-[12px] text-proposed">{[it.note, it.issue].filter(Boolean).join("; ")}</span>}
+                      </div>
+                    </div>
                   </td>
                   <td className="py-1.5 pr-3 text-muted whitespace-nowrap">{categoryShort(it.category)}</td>
                   <td className="py-1.5 pr-3 whitespace-nowrap">
@@ -236,7 +258,7 @@ function ItemsTable({ items, showOffice = true }: { items: EquipmentItem[]; show
                         ))}
                       </select>
                     ) : (
-                      (portName(it.port_id) ?? (office?.units.length === 1 ? portName(office.units[0]) : <span className="text-faint">—</span>))
+                      (portName(it.port_id) ?? <span className="text-muted text-[12.5px]">Аймгийн түвшинд</span>)
                     )}
                   </td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">
@@ -248,9 +270,14 @@ function ItemsTable({ items, showOffice = true }: { items: EquipmentItem[]; show
                     {it.life_years ? <span className="block text-[12px]">{it.life_years} жил</span> : null}
                   </td>
                   <td className="py-1.5 pr-3 text-right whitespace-nowrap">{it.cost ? fmtMnt(it.cost) : "—"}</td>
-                  <td className="py-1.5">
-                    <CondLabel c={c} />
+                  <td className="py-1.5 pr-3">
+                    <CondLabel it={it} />
                   </td>
+                  {canEdit && (
+                    <td className="py-1.5 whitespace-nowrap">
+                      <EditEquipmentButton item={it} />
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -281,23 +308,26 @@ function ItemsExplorer() {
   const office = q.get("office");
   const cat = q.get("cat");
   const cond = q.get("cond") as ItemCondition | null;
+  const port = q.get("port");
   const [text, setText] = useState("");
+  const officePorts = office ? (officeByCode(office)?.units ?? []) : [];
 
   const list = useMemo(() => {
     const needle = text.trim().toLowerCase();
     return items.filter(
       (it) =>
         (!office || it.office_code === office) &&
+        (!port || (port === "-" ? !it.port_id : it.port_id === port)) &&
         (!cat || it.category === cat) &&
         (!cond || conditionOf(it) === cond) &&
-        (!needle || `${it.name} ${it.model ?? ""} ${it.supplier ?? ""}`.toLowerCase().includes(needle)),
+        (!needle || `${it.name} ${it.brand ?? ""} ${it.model ?? ""} ${it.supplier ?? ""}`.toLowerCase().includes(needle)),
     );
-  }, [items, office, cat, cond, text]);
+  }, [items, office, port, cat, cond, text]);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 items-center no-print">
-        <select aria-label="Газар" className={selectCls} value={office ?? ""} onChange={(e) => setQ({ office: e.target.value || null })}>
+        <select aria-label="Газар" className={selectCls} value={office ?? ""} onChange={(e) => setQ({ office: e.target.value || null, port: null })}>
           <option value="">Бүх газар</option>
           {CUSTOMS_OFFICES.filter((o) => items.some((i) => i.office_code === o.code)).map((o) => (
             <option key={o.code} value={o.code}>
@@ -305,6 +335,17 @@ function ItemsExplorer() {
             </option>
           ))}
         </select>
+        {officePorts.length > 1 && (
+          <select aria-label="Боомт" className={selectCls} value={port ?? ""} onChange={(e) => setQ({ port: e.target.value || null })}>
+            <option value="">Бүх нэгж</option>
+            {officePorts.map((u) => (
+              <option key={u} value={u}>
+                {ports.find((p) => p.id === u)?.name ?? u}
+              </option>
+            ))}
+            <option value="-">Аймгийн түвшинд</option>
+          </select>
+        )}
         <select aria-label="Ангилал" className={selectCls} value={cat ?? ""} onChange={(e) => setQ({ cat: e.target.value || null })}>
           <option value="">Бүх ангилал</option>
           {EQUIPMENT_CATEGORIES.map((c) => (
@@ -325,11 +366,12 @@ function ItemsExplorer() {
             aria-label="Нэр, загвараар хайх"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Нэр, загвар, нийлүүлэгч"
+            placeholder="Нэр, брэнд, загвар"
             className={`${selectCls} pl-8 w-[240px]`}
           />
         </div>
         <span className="ml-auto" />
+        <AddEquipmentButton office={office ?? undefined} port={port && port !== "-" ? port : office ? (officeByCode(office)?.primaryUnit ?? null) : null} label="Нэмэх" />
         <Button onClick={() => exportItems(list, ports, `Tonog_tokhooromj_${new Date().toISOString().slice(0, 10)}.xlsx`)} variant="primary">
           <FileDown className="w-4 h-4" aria-hidden /> Excel татах ({fmt(list.length)})
         </Button>
@@ -504,9 +546,12 @@ export function OfficeEquipment({ code }: { code: string }) {
         }
         actions={
           access === "ok" ? (
-            <Button onClick={() => exportItems(mine, ports, `Tonog_tokhooromj_${code}_${new Date().toISOString().slice(0, 10)}.xlsx`)} variant="primary">
-              <FileDown className="w-4 h-4" aria-hidden /> Excel татах
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <AddEquipmentButton office={code} port={office?.primaryUnit ?? null} />
+              <Button onClick={() => exportItems(mine, ports, `Tonog_tokhooromj_${code}_${new Date().toISOString().slice(0, 10)}.xlsx`)}>
+                <FileDown className="w-4 h-4" aria-hidden /> Excel татах
+              </Button>
+            </div>
           ) : undefined
         }
       />
@@ -514,10 +559,8 @@ export function OfficeEquipment({ code }: { code: string }) {
         <EquipmentGate>
           <div className="space-y-5">
             <Kpis items={mine} />
-            {office && office.units.length > 1 && (
-              <p className="text-[13.5px] text-muted">
-                Энэ газар {office.units.length} нэгжийг хамардаг. Бүртгэл газрын түвшинд хөтлөгддөг тул тоног төхөөрөмжийг боомтоор хуваарилсны дараа боомт тус бүрийн хуудсанд тусдаа харагдана.
-              </p>
+            {office && !office.primaryUnit && (
+              <PortSplit office={office.code} units={office.units} items={mine} />
             )}
             {EQUIPMENT_CATEGORIES.map((c) => {
               const list = mine.filter((i) => i.category === c.key);
@@ -542,68 +585,128 @@ export function OfficeEquipment({ code }: { code: string }) {
   );
 }
 
+/** Аймгийн газрын тоног төхөөрөмж нэгж тус бүрт хэрхэн хуваарилагдсан. */
+function PortSplit({ office, units, items }: { office: string; units: string[]; items: EquipmentItem[] }) {
+  const { ports } = useData();
+  const rows: [string, string, EquipmentItem[]][] = [
+    ...units.map((u) => [u, ports.find((p) => p.id === u)?.name ?? u, items.filter((i) => i.port_id === u)] as [string, string, EquipmentItem[]]),
+    ["-", "Аймгийн газрын түвшинд (боомтод хуваарилаагүй)", items.filter((i) => !i.port_id)],
+  ];
+  return (
+    <Section title="Нэгжээр" aside="Аймгийн нэрээр нэрлэгдсэн газар">
+      <p className="text-[13px] text-muted mb-2">
+        Excel бүртгэлийн мөрүүд аймгийн газрын түвшинд байна. Боомт тус бүрийн тоног төхөөрөмжийг админ «Тоног төхөөрөмж нэмэх» товчоор, эсвэл жагсаалтын «Боомт» баганаас хуваарилж оруулна.
+      </p>
+      <table className="w-full text-[14px] border-collapse">
+        <tbody>
+          {rows.map(([id, name, list]) => {
+            const t = totalsOf(list);
+            return (
+              <tr key={id} className="border-b border-rule-soft">
+                <td className="py-1.5 pr-3">
+                  {id === "-" ? name : <a href={href(`/port/${id}`)}>{name}</a>}
+                </td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">
+                  {t.lines ? (
+                    <a href={href("/equipment", { tab: "list", office, port: id })} className="no-underline hover:underline">
+                      {fmt(t.qty)} ш
+                    </a>
+                  ) : (
+                    <span className="text-faint">—</span>
+                  )}
+                </td>
+                <td className={`py-1.5 text-right tabular-nums ${t.faulty ? "text-flag" : "text-faint"}`}>{t.faulty ? `${t.faulty} хэвийн бус` : "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Section>
+  );
+}
+
+function CategoryTable({ list, office }: { list: EquipmentItem[]; office: string }) {
+  return (
+    <table className="w-full text-[14px] border-collapse">
+      <thead>
+        <tr className="text-left text-[12.5px] text-muted border-b border-rule">
+          <th className="py-1.5 pr-3 font-medium">Ангилал</th>
+          <th className="py-1.5 pr-3 font-medium text-right">Тоо</th>
+          <th className="py-1.5 pr-3 font-medium text-right">Хэвийн бус</th>
+          <th className="py-1.5 font-medium text-right">Хугацаа дууссан</th>
+        </tr>
+      </thead>
+      <tbody>
+        {EQUIPMENT_CATEGORIES.map((c) => {
+          const t = totalsOf(list.filter((i) => i.category === c.key));
+          if (!t.qty) return null;
+          return (
+            <tr key={c.key} className="border-b border-rule-soft">
+              <td className="py-1.5 pr-3">
+                <a href={href("/equipment", { tab: "list", office, cat: c.key })} className="no-underline hover:underline">
+                  {c.short}
+                </a>
+              </td>
+              <td className="py-1.5 pr-3 text-right tabular-nums">{fmt(t.qty)}</td>
+              <td className={`py-1.5 pr-3 text-right tabular-nums ${t.faulty ? "text-flag font-medium" : "text-faint"}`}>{t.faulty || "—"}</td>
+              <td className={`py-1.5 text-right tabular-nums ${t.expiredQty ? "text-proposed" : "text-faint"}`}>{t.expiredQty || "—"}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
 /** Боомтын хуудсанд харагдах хэсэг. */
 export function PortEquipmentSection({ port }: { port: BorderCrossing }) {
   const { items, budget, access } = useEquipment();
   const office = officeForUnit(port.id);
-  const shared = office ? office.units.length > 1 : false;
-  const scoped = useMemo(() => {
-    if (!office) return [];
-    const ofOffice = items.filter((i) => i.office_code === office.code);
-    if (!shared) return ofOffice;
-    return ofOffice.filter((i) => i.port_id === port.id);
-  }, [items, office, shared, port.id]);
-  const officeAll = useMemo(() => (office ? items.filter((i) => i.office_code === office.code) : []), [items, office]);
+  const mine = useMemo(
+    () => (office ? items.filter((i) => i.office_code === office.code && (i.port_id === port.id || (!i.port_id && office.primaryUnit === port.id))) : []),
+    [items, office, port.id],
+  );
+  const aimagLevel = useMemo(
+    () => (office && !office.primaryUnit ? items.filter((i) => i.office_code === office.code && !i.port_id) : []),
+    [items, office],
+  );
   const bud = useMemo(() => (office ? budgetForOffice(budget, office.code) : []), [budget, office]);
-  // Хуваарилалт хийгдсэн бол боомтын, үгүй бол газрын нийт дүнг харуулна
-  const base = shared && !scoped.length ? officeAll : scoped;
 
   if (!office) return null;
+  const t = totalsOf(mine);
 
   return (
-    <Section
-      title="Гаалийн хяналтын тоног төхөөрөмж"
-      aside={
-        <a href={href(`/equipment/office/${encodeURIComponent(office.code)}`)}>{office.code} газрын бүртгэл</a>
-      }
-    >
+    <Section title="Гаалийн хяналтын тоног төхөөрөмж" aside={<a href={href(`/equipment/office/${encodeURIComponent(office.code)}`)}>{office.code} газрын бүртгэл</a>}>
       <EquipmentGate compact>
         {access === "ok" && (
           <div className="space-y-3">
-            {shared && (
-              <p className="text-[13px] text-muted">
-                {office.name} {office.units.length} нэгжийг хамардаг. Энэ боомтод хуваарилсан {fmt(totalsOf(scoped).qty)} ш, газрын нийт {fmt(totalsOf(officeAll).qty)} ш.
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-[13.5px] text-muted mr-auto">
+                {mine.length ? (
+                  <>
+                    Энэ боомтод {fmt(t.qty)} ш ({fmt(t.lines)} төрөл) бүртгэлтэй{t.faulty ? <>, үүнээс <span className="text-flag">{t.faulty} хэвийн бус</span></> : null}.
+                  </>
+                ) : (
+                  "Энэ боомтод тусгайлан бүртгэсэн тоног төхөөрөмж алга."
+                )}
+              </p>
+              <AddEquipmentButton office={office.code} port={port.id} />
+            </div>
+            {mine.length > 0 && <CategoryTable list={mine} office={office.code} />}
+            {mine.length > 0 && (
+              <details className="group">
+                <summary className="cursor-pointer text-[13.5px] text-azure hover:underline select-none">Дэлгэрэнгүй жагсаалт ({fmt(mine.length)} мөр)</summary>
+                <div className="mt-3">
+                  <ItemsTable items={mine} showOffice={false} />
+                </div>
+              </details>
+            )}
+            {aimagLevel.length > 0 && (
+              <p className="text-[13px] border-l-2 border-rule pl-3 text-muted">
+                Аймгийн газрын бүртгэлд боомтод хуваарилаагүй {fmt(totalsOf(aimagLevel).qty)} ш тоног төхөөрөмж аймгийн түвшинд байна.{" "}
+                <a href={href("/equipment", { tab: "list", office: office.code, port: "-" })}>Жагсаалт харах</a>
               </p>
             )}
-            <table className="w-full text-[14px] border-collapse">
-              <thead>
-                <tr className="text-left text-[12.5px] text-muted border-b border-rule">
-                  <th className="py-1.5 pr-3 font-medium">Ангилал</th>
-                  <th className="py-1.5 pr-3 font-medium text-right">Тоо</th>
-                  <th className="py-1.5 pr-3 font-medium text-right">Хэвийн бус</th>
-                  <th className="py-1.5 font-medium text-right">Хугацаа дууссан</th>
-                </tr>
-              </thead>
-              <tbody>
-                {EQUIPMENT_CATEGORIES.map((c) => {
-                  const t = totalsOf(base.filter((i) => i.category === c.key));
-                  if (!t.qty) return null;
-                  return (
-                    <tr key={c.key} className="border-b border-rule-soft">
-                      <td className="py-1.5 pr-3">
-                        <a href={href("/equipment", { tab: "list", office: office.code, cat: c.key })} className="no-underline hover:underline">
-                          {c.short}
-                        </a>
-                      </td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums">{fmt(t.qty)}</td>
-                      <td className={`py-1.5 pr-3 text-right tabular-nums ${t.faulty ? "text-flag font-medium" : "text-faint"}`}>{t.faulty || "—"}</td>
-                      <td className={`py-1.5 text-right tabular-nums ${t.expiredQty ? "text-proposed" : "text-faint"}`}>{t.expiredQty || "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {shared && !scoped.length && <p className="text-[12.5px] text-muted">Боомтод хуваарилаагүй тул хүснэгтэд газрын нийт дүнг харуулав.</p>}
             {bud.length > 0 && (
               <p className="text-[13.5px]">
                 2027 оны төсвийн саналд {bud.length} арга хэмжээ тусгагдсан:{" "}

@@ -4,7 +4,8 @@
  * хамгаалагдсан хүснэгтэд бичигдэнэ (admin эрх шаардлагатай).
  */
 import { getSupabase } from "./supabase";
-import type { BudgetItem, EquipmentItem } from "./equipment";
+import { MANUAL_FIELDS, type BudgetItem, type EquipmentItem, type ManualField } from "./equipment";
+import { defaultPortFor } from "../data/customsOffices";
 
 type Row = unknown[];
 
@@ -13,7 +14,8 @@ const OFFICE_KEYS: [string, string][] = [
   ["ХАНГИ", "ХАГГ"], ["ШИВЭЭХҮРЭН", "ШХГГ"], ["БАЯН-ӨЛГИЙ", "БӨГГ"], ["ГАШУУН", "ГСГГ"], ["ЗАМЫН-ҮҮД", "ЗҮГГ"],
   ["ЧИНГИС", "ЧХОУНБГГ"], ["УЛААНБААТАР ХОТ", "УБГГ"], ["УЛААБААТАР ХОТ", "УБГГ"], ["САЙНШАНД", "СШГГ"], ["ДОРНОД", "ДОГГ"],
   ["ДАРХАН", "ДАГГ"], ["ШУУДАН", "УХШИГГ"], ["ХАНХ", "ХАГХ"], ["ХӨВСГӨЛ", "ХАГХ"], ["АРЦСУУРЬ", "ЗАГХ"], ["ЗАВХАН", "ЗАГХ"],
-  ["ОРХОН", "ОГГ"], ["БУЛГАН", "ХОГГ"], ["ХОВД", "ХОГГ"], ["ЕРӨНХИЙ ГАЗАР", "ГЕГ"],
+  ["ОРХОН", "ОГГ"], ["БУЛГАН", "ХОГГ"], ["ХОВД", "ХОГГ"], ["МӨРӨН", "ХАГХ"], ["ЦАГААНДЭЛ", "ӨГГ"], ["ӨМНӨГОВЬ", "ӨГГ"],
+  ["ЕРӨНХИЙ ГАЗАР", "ГЕГ"],
 ];
 export const officeCodeFromText = (s: string | null | undefined) => {
   if (!s) return null;
@@ -54,7 +56,7 @@ async function readSheets(file: File) {
   return { XLSX, wb };
 }
 
-export type NewItem = Omit<EquipmentItem, "id" | "port_id"> & { source_row: number };
+export type NewItem = Omit<EquipmentItem, "id" | "port_id" | ManualField> & { source_row: number };
 export type NewBudget = Omit<BudgetItem, "id" | "port_id"> & { source_row: number };
 
 export interface ParseReport<T> {
@@ -216,15 +218,20 @@ const key = (r: { office_code: string; name: string; model: string | null; commi
 export async function replaceInventory(rows: NewItem[], previous: EquipmentItem[], source: string) {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase тохируулагдаагүй.");
-  const keep = new Map(previous.filter((p) => p.port_id).map((p) => [key(p), p.port_id]));
-  const payload = rows.map((r) => ({ ...r, source, port_id: keep.get(key(r)) ?? null }));
+  // Гараар нөхсөн талбар (брэнд, зураг г.м.) болон хуваарилалтыг хадгална
+  const keep = new Map(previous.map((p) => [key(p), p]));
+  const payload = rows.map((r) => {
+    const old = keep.get(key(r));
+    const manual = Object.fromEntries(MANUAL_FIELDS.map((f) => [f, old?.[f] ?? null]));
+    return { ...r, ...manual, source, port_id: old?.port_id ?? defaultPortFor(r.office_code) };
+  });
   const del = await sb.from("equipment_items").delete().eq("source", source);
   if (del.error) throw del.error;
   for (let i = 0; i < payload.length; i += 500) {
     const { error } = await sb.from("equipment_items").insert(payload.slice(i, i + 500));
     if (error) throw error;
   }
-  return { inserted: payload.length, keptAssignments: payload.filter((p) => p.port_id).length };
+  return { inserted: payload.length, keptAssignments: payload.filter((p) => p.port_id && !defaultPortFor(p.office_code)).length };
 }
 
 export async function replaceBudget(rows: NewBudget[], source: string) {

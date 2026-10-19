@@ -31,7 +31,31 @@ export interface EquipmentItem {
   writeoff_date: string | null;
   note: string | null;
   issue: string | null;
+  // Админ гараар нөхөх талбарууд
+  brand: string | null;
+  purpose: string | null;
+  capacity: string | null;
+  origin_country: string | null;
+  manufacture_year: number | null;
+  status: ItemStatus | null;
+  photo_path: string | null;
+  source?: string | null;
 }
+
+export type ItemStatus = "ok" | "partial" | "repair" | "faulty" | "idle";
+export const STATUS_LABEL: Record<ItemStatus, string> = {
+  ok: "Хэвийн ажиллаж байна",
+  partial: "Зарим нь хэвийн бус",
+  repair: "Засварт байгаа",
+  faulty: "Эвдэрсэн, ажиллахгүй",
+  idle: "Ашиглагдаагүй, нөөцөд",
+};
+
+/** Excel-ээс ирдэггүй, гараар нөхдөг талбарууд (дахин импортлоход хадгалагдана). */
+export const MANUAL_FIELDS = ["brand", "purpose", "capacity", "origin_country", "manufacture_year", "status", "photo_path"] as const;
+export type ManualField = (typeof MANUAL_FIELDS)[number];
+export const MANUAL_SOURCE = "Гараар бүртгэсэн";
+export const PHOTO_BUCKET = "equipment-photos";
 
 export interface BudgetItem {
   id: number;
@@ -69,7 +93,7 @@ export type ItemCondition = "faulty" | "expired" | "ok";
 
 /** Хэвийн бус ширхэгтэй бол "faulty"; ашиглалтын хугацаа дууссан бол "expired". */
 export function conditionOf(it: EquipmentItem): ItemCondition {
-  if ((it.qty_faulty ?? 0) > 0) return "faulty";
+  if ((it.qty_faulty ?? 0) > 0 || it.status === "faulty" || it.status === "repair" || it.status === "partial") return "faulty";
   if (it.life_years && it.remaining_years !== null && it.remaining_years <= 0) return "expired";
   return "ok";
 }
@@ -163,7 +187,24 @@ interface EquipmentState {
   signOut: () => Promise<void>;
   reload: () => void;
   assignPort: (ids: number[], portId: string | null) => Promise<string | null>;
+  saveItem: (item: Partial<EquipmentItem> & { id?: number }, photo?: File | null) => Promise<string | null>;
+  deleteItem: (id: number) => Promise<string | null>;
+  photoUrl: (path: string) => Promise<string | null>;
 }
+
+/** Зургийг хөтөч дотор 1600px хүртэл багасгаж JPEG болгоно. */
+async function shrinkImage(file: File, max = 1600): Promise<Blob> {
+  const bmp = await createImageBitmap(file).catch(() => null);
+  if (!bmp) return file;
+  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * k);
+  c.height = Math.round(bmp.height * k);
+  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+  return new Promise((res) => c.toBlob((b) => res(b ?? file), "image/jpeg", 0.85));
+}
+
+const photoCache = new Map<string, { url: string; at: number }>();
 
 const Ctx = createContext<EquipmentState | null>(null);
 
@@ -314,6 +355,8 @@ export function EquipmentProvider({ children }: { children: ReactNode }) {
         .single();
       if (error) return /duplicate|unique/i.test(error.message) ? "Таны өмнөх хүсэлт шийдвэрлэгдээгүй байна." : error.message;
       setMyRequest(data as AccessRequest);
+      // Админд имэйлээр мэдэгдэнэ (алдаа гарсан ч хүсэлт хадгалагдсан хэвээр)
+      sb.functions.invoke("notify-access-request", { body: { request_id: (data as AccessRequest).id } }).catch(() => {});
       return null;
     },
     [sb],
@@ -367,6 +410,60 @@ export function EquipmentProvider({ children }: { children: ReactNode }) {
     [sb],
   );
 
+  const saveItem = useCallback(
+    async (item: Partial<EquipmentItem> & { id?: number }, photo?: File | null) => {
+      if (!sb) return "Supabase тохируулагдаагүй байна.";
+      const row: Record<string, unknown> = { ...item };
+      delete row.id;
+      delete row.source;
+      if (photo) {
+        const blob = await shrinkImage(photo);
+        const path = `${item.office_code ?? "other"}/${crypto.randomUUID()}.jpg`;
+        const up = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: "image/jpeg" });
+        if (up.error) return `Зураг хадгалахад алдаа гарлаа: ${up.error.message}`;
+        row.photo_path = path;
+      }
+      row.updated_at = new Date().toISOString();
+      const q = item.id
+        ? sb.from("equipment_items").update(row).eq("id", item.id).select().single()
+        : sb.from("equipment_items").insert({ ...row, source: MANUAL_SOURCE }).select().single();
+      const { data, error } = await q;
+      if (error) return error.message;
+      const saved = data as EquipmentItem;
+      setItems((prev) => (item.id ? prev.map((x) => (x.id === saved.id ? saved : x)) : [...prev, saved]));
+      // Солигдсон хуучин зургийг устгана (админ эрхтэй үед)
+      const old = item.id ? items.find((x) => x.id === item.id)?.photo_path : null;
+      if (photo && old && old !== saved.photo_path && role === "admin") await sb.storage.from(PHOTO_BUCKET).remove([old]);
+      return null;
+    },
+    [sb, items, role],
+  );
+
+  const deleteItem = useCallback(
+    async (id: number) => {
+      if (!sb) return "Supabase тохируулагдаагүй байна.";
+      const old = items.find((x) => x.id === id);
+      const { error } = await sb.from("equipment_items").delete().eq("id", id);
+      if (error) return error.message;
+      if (old?.photo_path) await sb.storage.from(PHOTO_BUCKET).remove([old.photo_path]);
+      setItems((prev) => prev.filter((x) => x.id !== id));
+      return null;
+    },
+    [sb, items],
+  );
+
+  const photoUrl = useCallback(
+    async (path: string) => {
+      if (!sb) return null;
+      const hit = photoCache.get(path);
+      if (hit && Date.now() - hit.at < 50 * 60 * 1000) return hit.url;
+      const { data } = await sb.storage.from(PHOTO_BUCKET).createSignedUrl(path, 3600);
+      if (data?.signedUrl) photoCache.set(path, { url: data.signedUrl, at: Date.now() });
+      return data?.signedUrl ?? null;
+    },
+    [sb],
+  );
+
   const value = useMemo(
     () => ({
       access,
@@ -392,8 +489,11 @@ export function EquipmentProvider({ children }: { children: ReactNode }) {
       signOut,
       reload: () => setTick((t) => t + 1),
       assignPort,
+      saveItem,
+      deleteItem,
+      photoUrl,
     }),
-    [access, session, items, budget, error, role, signIn, signUp, sendReset, updatePassword, recovering, myRequest, submitRequest, requests, staff, decide, setStaffRole, revokeStaff, signOut, assignPort],
+    [access, session, items, budget, error, role, signIn, signUp, sendReset, updatePassword, recovering, myRequest, submitRequest, requests, staff, decide, setStaffRole, revokeStaff, signOut, assignPort, saveItem, deleteItem, photoUrl],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
