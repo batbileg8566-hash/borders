@@ -155,3 +155,8 @@ a.ref-chip:hover {
     text-decoration: none;
   }
 }
+
+/* Суурь зургийг бүдгэрүүлж, боомтын тэмдгийг тодруулна */
+.leaflet-tile-pane {
+  filter: saturate(0.45) contrast(0.95) brightness(1.03);
+}
